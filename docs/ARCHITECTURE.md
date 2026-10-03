@@ -42,6 +42,7 @@ Exposed as **plain Lua globals** (`wbIsAvailable()` etc.) via
 | `wbCheckForUpdates()` | - | starts a job; returns jobId. A done status carries `updates` = list of **workshopIds** with updates available (one entry per outdated item, however many mods it holds) |
 | `wbUpdateMod(workshopId)` | workshop ID | jobId |
 | `wbUpdateAll()` | - | jobId (checks, then downloads only outdated items) |
+| `wbInvalidateModCaches()` | - | invalidates the game's cached mod folder scan (`ZomboidFileSystem.resetModFolders()`) and parsed mod-info cache (`ChooseGameInfo.Reset()`) so a following `ms:reloadMods()` actually sees freshly downloaded/updated mods. Call on the game thread before `reloadMods()` |
 | `wbGetJobStatus(jobId)` | jobId | **JSON string** `{"state","done","total","message"[,"error"][,"updates"]}`, or null for unknown jobs. Lua decodes it with the pure-Lua `WB_Json.lua` (Kahlua's Java return marshaling is deliberately not relied upon). A done check-job carries `updates` = list of **workshopIds** with updates available (one entry per outdated item, however many mods it holds) |
 
 ### Job status shape (JSON string, decoded in Lua by WB_Json)
@@ -127,17 +128,17 @@ Hardening (Oct 2026, from an external audit):
 
 ### Single mod update
 1. Lua: per-mod button → `wbGetWorkshopId(modId)` → `wbUpdateMod(workshopId)` → jobId. The button reads **Update** when a check flagged the mod, **Force update** otherwise (it always re-downloads; it never checks first).
-2. Lua polls with the progress panel; the row label tracks the job ("Updating...", "Queued...", "Up to date" / failure). On success the update-available flag clears for the whole workshop item, so sibling mods from the same item lose their badges and the **Update all** count drops too. Per-mod jobs are tracked per workshop item: a second click while one is in flight coalesces instead of queueing a duplicate, and the panel label only ever shows the job for the workshop item currently selected (selecting another mod mid-download shows its live status on return, never another job's text).
+2. Lua polls with the progress panel; the row label tracks the job ("Updating...", "Queued...", "Up to date" / failure). On success the update-available flag clears for the whole workshop item, so sibling mods from the same item lose their badges and the **Update all** count drops too. Per-mod jobs are tracked per workshop item: a second click while one is in flight coalesces instead of queueing a duplicate, and the panel label only ever shows the job for the workshop item currently selected (selecting another mod mid-download shows its live status on return, never another job's text). Then `WB_RefreshModList` invalidates the game mod caches and reloads the list so the row shows the new mod.info (the info panel is not repainted by the reload, so the "Up to date" confirmation stays visible).
 3. Java (serialized with other downloads): download → move into `Zomboid/mods/` (replace existing) → update map → job `done`.
 
 ### Update all
 1. Lua: **Update all** button → `wbUpdateAll()` → jobId.
 2. Java: for each mapped workshop item, `GetPublishedFileDetails` → if `time_updated > timeUpdated`, download+move+update map. Job reports `done/total`.
-3. Lua: refresh the Mods list when the job completes.
+3. Lua: `WB_RefreshModList` on completion: `wbInvalidateModCaches()` (the game caches the mod folder scan and parsed mod.infos, so `reloadMods()` alone would rebuild from stale data) then `ms:reloadMods()`. Without the invalidation, updated mods would keep showing old names/versions in the list.
 
 ### Download a new mod
 1. Lua: **Download** button → dialog takes a workshop ID or URL → `WB_ParseWorkshopId` → `wbUpdateMod(workshopId)` → jobId. (The Java side treats untracked ids the same as updates: download → move into `Zomboid/mods/` → record in map.)
-2. Lua polls `wbGetJobStatus(jobId)` on tick with the progress panel; on completion the Mods list is reloaded so the new mod appears, and it is tracked from then on.
+2. Lua polls `wbGetJobStatus(jobId)` on tick with the progress panel; on completion `WB_RefreshModList` (invalidate + `ms:reloadMods()`) so the new mod appears, and it is tracked from then on.
 
 ### First run / missing pieces
 - ZombieBuddy not installed → Lua detects `wbIsAvailable() == false` (globals missing) → the Mods menu still hooks, but shows an in-game "install ZombieBuddy" guidance label instead of the Update buttons (`WB_HookModsMenuNoApi`).
@@ -151,7 +152,7 @@ Hardening (Oct 2026, from an external audit):
 - **Wrapper rule: always propagate return values.** Vanilla `prerender` does `v.height = y2 - y` where `y2 = self:doDrawItem(...)`; our first wrapper dropped the return and the menu rendered black with `__sub not defined for operands` thrown every frame. Wrapping a vanilla method means forwarding args AND returns.
 - **Per-mod Update button / status label**: `ModInfoPanel` - `createChildren()` once, `updateView(modInfo)` per selection. Button title is **Update** when a check flagged that mod, **Force update** otherwise.
 - Row states (three): in our map → per-mod button (+ "Update available" badge after a check); game's `getWorkshopID()` non-empty → "Managed by Steam"; else grey "Unknown workshop ID".
-- Wrapping is idempotent per instance and re-applied after `reloadMods()` (defensive re-hook in the update-all completion handler).
+- Wrapping is idempotent per instance and re-applied defensively by `WB_RefreshModList` after every list reload (update-all, per-mod update, and download flows).
 
 ## Design constraints
 

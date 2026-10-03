@@ -84,10 +84,8 @@ function WB_DownloadDialog:onDownloadClicked()
             else
                 print("[WorkshopBridge] download of " .. tostring(wsid) .. " complete")
                 WB_FlashMessage(ms, WB_Text.Downloaded)
-                -- rescan so the new mod shows up; then make sure our
-                -- menu hooks survived (re-applied defensively)
-                if ms and ms.reloadMods then pcall(function() ms:reloadMods() end) end
-                WB_HookInstance(ms)
+                -- rescan so the new mod shows up in the list
+                WB_RefreshModList(ms)
             end
         end,
     })

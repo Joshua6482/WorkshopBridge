@@ -86,6 +86,11 @@ function WB_InstallDebugStub()
         return newJob("update", 8)
     end
 
+    -- no-op: the stub has no game caches to invalidate, but the real API
+    -- exposes it and WB_RefreshModList calls it when present.
+    function wbInvalidateModCaches()
+    end
+
     function wbGetJobStatus(jobId)
         local j = stubJobs[jobId]
         if not j then return nil end

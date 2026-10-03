@@ -122,11 +122,21 @@ planned properly.
   live status, duplicate clicks coalesce instead of queueing, failures persist
   on reselect until retried, and update-all clears stale failure notes.
 
-- [ ] **Mod menu UI refresh without restart/lua reload.** After an
-  install/update, the Mods menu list should reflect the change. We already
-  call `ms:reloadMods()` on completion; verify in-game whether the visible
-  list actually refreshes, and if not find the right refresh hook (the game
-  may cache the mod list per screen open).
+- [x] **Mod menu UI refresh without restart/lua reload.** Root-caused via the
+  game decompile (Oct 2026): `ms:reloadMods()` rebuilds the menu model from
+  `getModDirectoryTable()`, but the game caches the mod folder scan after the
+  first call (`ZomboidFileSystem.modFolders`) and caches parsed mod.infos by
+  id (`ChooseGameInfo.Mods`), so the rebuild saw stale data. The game's own
+  file watcher can't save us: its `isModFile` gate only matches paths under
+  already-cached mod dirs, so brand-new folders never trigger its refresh.
+  Fix: new Lua-visible `wbInvalidateModCaches()` calls
+  `ZomboidFileSystem.instance.resetModFolders()` + `ChooseGameInfo.Reset()`
+  on the game thread (mirroring the game's own `ZomboidFileSystem.update()`),
+  then `ms:reloadMods()`; wrapped in a `WB_RefreshModList(ms)` helper used
+  by all three completion flows (update-all, per-mod update, download-new).
+  The info panel is not repainted by the reload (it only updates on
+  selection), so per-mod confirmation labels survive. Needs joshua's in-game
+  verification.
 
 - [ ] **Orphaned sub-mods on multi-mod item update.** If a workshop item
   containing several mods drops one of them, updating installs the new set

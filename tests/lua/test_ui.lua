@@ -114,6 +114,15 @@ end
 check(WB_ApiKind == "stub", "boot installs debug stub")
 check(type(wbIsAvailable) == "function" and wbIsAvailable(), "stub api available")
 
+-- wrap the cache-invalidation call so the flows below can assert the game
+-- caches are invalidated before the list reloads
+local invalidateCalls = 0
+local realInvalidate = wbInvalidateModCaches
+wbInvalidateModCaches = function(...)
+    invalidateCalls = invalidateCalls + 1
+    return realInvalidate(...)
+end
+
 -- ---------- menu hook ----------
 local ms = setmetatable({ x = 0, y = 0, width = 1024, height = 768, children = {} },
     { __index = UIElement })
@@ -202,6 +211,8 @@ check(panel.wbUpdateBtn.title == WB_Text.ForceUpdate, "button says Force update 
     panel.wbUpdateBtn.title)
 check(ms.wbUpdateAllBtn.title == "Update all", "update-all count reset after per-mod update",
     ms.wbUpdateAllBtn.title)
+check(invalidateCalls >= 1, "mod caches invalidated after per-mod update", invalidateCalls)
+check((ms.reloaded or 0) >= 1, "list reloaded after per-mod update", ms.reloaded)
 
 -- ---------- per-mod job status follows the selected mod ----------
 -- start a fresh update, then select other mods mid-download
@@ -254,6 +265,7 @@ tick(250)
 check(WB_CountUpdateAvailable() == 0, "update-all clears marks")
 check(ms.wbUpdateAllBtn.title == "Update all", "update-all title reset")
 check((ms.reloaded or 0) >= 1, "reloadMods called after update-all")
+check(invalidateCalls >= 2, "mod caches invalidated after update-all", invalidateCalls)
 
 -- ---------- check flashes its result summary ----------
 panel:updateView(fakeModInfo("SomeMod", "")) -- select; no updates marked now

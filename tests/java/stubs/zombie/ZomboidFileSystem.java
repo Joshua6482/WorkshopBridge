@@ -5,6 +5,8 @@ package zombie;
 // (WBTest refuses to run in that case).
 public class ZomboidFileSystem {
     public static final ZomboidFileSystem instance = new ZomboidFileSystem();
+    /** Test hook: set when resetModFolders() is called. */
+    public static boolean resetModFoldersCalled = false;
     public String getCacheDir() {
         String d = System.getProperty("wb.test.zomboid");
         if (d == null || d.isEmpty()) {
@@ -12,5 +14,9 @@ public class ZomboidFileSystem {
                     "wb.test.zomboid not set - run the tests via tests/java/run.sh");
         }
         return d;
+    }
+    /** Mirrors the real method: drops the cached mod folder scan. */
+    public void resetModFolders() {
+        resetModFoldersCalled = true;
     }
 }
