@@ -14,6 +14,12 @@ cd WorkshopBridge/java-src
 gradle -PpzJavaDir="<path-to-game-java-dir>" installJar
 ```
 
+Or from the repo root, which checks the prerequisites first:
+
+```bash
+./compile.sh "<path-to-game-classes-or-jar>"
+```
+
 This compiles against Java 17 and copies the result to
 `WorkshopBridge/42/media/java/WorkshopBridge.jar`, matching `javaJarFile`
 in `common/mod.info`.
