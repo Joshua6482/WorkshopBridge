@@ -79,6 +79,30 @@ public final class SteamCmdApi {
     }
 
     /**
+     * Invalidates the game's cached mod directory list and mod-info cache so a
+     * subsequent {@code ModSelector:reloadMods()} actually sees freshly
+     * downloaded/updated mods. The game scans the mod folders once and caches
+     * the result (ZomboidFileSystem.modFolders), and ChooseGameInfo caches
+     * parsed mod.infos by mod id; {@code reloadMods()} alone rebuilds the menu
+     * model from those stale caches, and the game's own file watcher never
+     * notices brand-new mod folders (its isModFile gate only matches paths
+     * under already-cached mod dirs). This mirrors what the game's own
+     * ZomboidFileSystem.update() does when its watcher fires. Call it on the
+     * game thread (Lua job-completion handlers qualify), right before
+     * {@code ms:reloadMods()}.
+     */
+    @LuaMethod(name = "wbInvalidateModCaches", global = true)
+    public static void wbInvalidateModCaches() {
+        try {
+            zombie.ZomboidFileSystem.instance.resetModFolders();
+            zombie.gameStates.ChooseGameInfo.Reset();
+            System.out.println("[WorkshopBridge] invalidated game mod caches");
+        } catch (Throwable t) {
+            System.out.println("[WorkshopBridge] mod cache invalidation failed: " + t);
+        }
+    }
+
+    /**
      * Polls a job. Returns a JSON status object
      * ({@code state/done/total/message[/error][/updates]}), or null for
      * unknown job ids. See docs/ARCHITECTURE.md for the shape.

@@ -97,6 +97,15 @@ end
 
 check(WB_ApiKind == "stub", "boot installs debug stub")
 
+-- wrap the cache-invalidation call so the download flow can assert the
+-- game caches are invalidated before the list reloads
+local invalidateCalls = 0
+local realInvalidate = wbInvalidateModCaches
+wbInvalidateModCaches = function(...)
+    invalidateCalls = invalidateCalls + 1
+    return realInvalidate(...)
+end
+
 -- ---------- parser unit tests ----------
 check(WB_ParseWorkshopId("2685600088") == "2685600088", "parse bare id")
 check(WB_ParseWorkshopId("  2685600088  ") == "2685600088", "parse id with whitespace")
@@ -148,6 +157,7 @@ dlg.downloadBtn.onclick()
 check(ms.wbDownloadDialog == nil, "dialog closes on valid input")
 tick(200) -- stub update job: 12 ticks/step x 8 steps
 check((ms.reloaded or 0) >= 1, "reloadMods called after download")
+check(invalidateCalls >= 1, "mod caches invalidated before list reload", invalidateCalls)
 
 -- URL input works too
 ms.wbDownloadBtn.onclick()

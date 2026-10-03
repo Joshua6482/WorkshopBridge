@@ -90,6 +90,21 @@ end
 
 -- ---------- button handlers ----------
 
+-- Invalidate the game's cached mod folder scan and mod-info cache, then
+-- rebuild the visible mod list. reloadMods() alone is not enough: the game
+-- caches the mod directory scan after the first call and keeps parsed
+-- mod.infos by mod id, so newly downloaded folders (and changed mod.infos)
+-- would not show up. Must run on the game thread; job onDone handlers
+-- qualify (they run from the tick pump).
+function WB_RefreshModList(ms)
+    if type(wbInvalidateModCaches) == "function" then
+        pcall(wbInvalidateModCaches)
+    end
+    if ms and ms.reloadMods then pcall(function() ms:reloadMods() end) end
+    -- make sure our row wrap survived the reload (re-applied defensively)
+    WB_HookInstance(ms)
+end
+
 local function WB_OnCheckAll(ms)
     if type(wbCheckForUpdates) ~= "function" then return end
     local ok, jobId = pcall(wbCheckForUpdates)
@@ -164,10 +179,8 @@ local function WB_OnUpdateAll(ms)
                     if j.failed then wbModJobs[k] = nil end
                 end
                 WB_FlashMessage(ms, (st and st.message) or WB_Text.Updating)
-                -- rescan so newly downloaded/changed mods appear; then make
-                -- sure our row wrap survived (re-applied defensively)
-                if ms.reloadMods then pcall(function() ms:reloadMods() end) end
-                WB_HookInstance(ms)
+                -- rescan so newly downloaded/changed mods appear in the list
+                WB_RefreshModList(ms)
             end
         end,
     })
@@ -232,6 +245,13 @@ local function WB_OnModUpdate(panel)
                 WB_SetLabel(panel.wbStatusLabel,
                     failed and wbModJobs[wsid].message or WB_Text.UpToDate)
                 WB_RefreshModButtonTitle(panel, panel.wbModId)
+            end
+            -- the files on disk changed: rescan so the list shows the new
+            -- mod.info (name/version) instead of stale cached data. The
+            -- info panel is not repainted by the reload (it only updates
+            -- on selection), so the confirmation above stays visible.
+            if not failed then
+                WB_RefreshModList(wbScreen)
             end
         end,
     })

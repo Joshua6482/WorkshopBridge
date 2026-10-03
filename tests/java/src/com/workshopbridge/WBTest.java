@@ -588,6 +588,15 @@ public class WBTest {
                 "validation timeout is usable (first-run self-update)");
         check(!SteamCmd.validationOk("not executable"), "other reasons are not usable");
 
+        // ---- 16. wbInvalidateModCaches resets the game mod caches ----
+        zombie.ZomboidFileSystem.resetModFoldersCalled = false;
+        zombie.gameStates.ChooseGameInfo.resetCalled = false;
+        SteamCmdApi.wbInvalidateModCaches();
+        check(zombie.ZomboidFileSystem.resetModFoldersCalled,
+                "wbInvalidateModCaches resets the mod folder scan");
+        check(zombie.gameStates.ChooseGameInfo.resetCalled,
+                "wbInvalidateModCaches resets the mod info cache");
+
         System.out.println(failures == 0 ? "ALL TESTS PASSED" : failures + " FAILURES");
         System.exit(failures == 0 ? 0 : 1);
     }
