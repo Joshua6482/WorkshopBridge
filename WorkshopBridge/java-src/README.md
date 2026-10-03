@@ -20,6 +20,10 @@ Or from the repo root, which checks the prerequisites first:
 ./compile.sh "<path-to-game-classes-or-jar>"
 ```
 
+The path can also come from `$PZ_JAVA_DIR`, or be omitted entirely: the
+script then looks in `WorkshopBridge/java-src/libs/` for `pz-java/`,
+`projectzomboid.jar`, or any other jar holding the game classes.
+
 This compiles against Java 17 and copies the result to
 `WorkshopBridge/42/media/java/WorkshopBridge.jar`, matching `javaJarFile`
 in `common/mod.info`.

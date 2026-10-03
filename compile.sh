@@ -9,8 +9,9 @@
 # itself, e.g.:
 #   ./compile.sh ~/games/projectzomboid/projectzomboid.jar
 #
-# When omitted, $PZ_JAVA_DIR is used, falling back to
-# WorkshopBridge/java-src/libs/pz-java/.
+# When omitted, $PZ_JAVA_DIR is used; otherwise it looks inside
+# WorkshopBridge/java-src/libs/ for libs/pz-java/, libs/projectzomboid.jar,
+# or any other jar holding the game classes.
 #
 # One-time setup: put ZombieBuddy.jar in WorkshopBridge/java-src/libs/
 # (see WorkshopBridge/java-src/README.md).
@@ -45,7 +46,7 @@ if [ ! -f "$SRC/libs/ZombieBuddy.jar" ]; then
     exit 1
 fi
 
-PZ_JAVA="${1:-${PZ_JAVA_DIR:-$SRC/libs/pz-java}}"
+PZ_JAVA=""
 has_game_classes() {
     if [ -d "$1" ]; then
         [ -f "$1/zombie/ZomboidFileSystem.class" ]
@@ -55,6 +56,32 @@ has_game_classes() {
         return 1
     fi
 }
+# Game classes location: explicit argument wins, then $PZ_JAVA_DIR, then the
+# conventional spots inside java-src/libs (a dropped-in projectzomboid.jar
+# just works).
+resolve_pz_java() {
+    if [ -n "${1:-}" ]; then echo "$1"; return 0; fi
+    if [ -n "${PZ_JAVA_DIR:-}" ]; then echo "$PZ_JAVA_DIR"; return 0; fi
+    local libs="$SRC/libs" candidate jar
+    for candidate in "$libs/pz-java" "$libs/projectzomboid.jar"; do
+        if has_game_classes "$candidate" 2>/dev/null; then
+            echo "$candidate"
+            return 0
+        fi
+    done
+    for jar in "$libs"/*.jar; do
+        [ -e "$jar" ] || break
+        case "$(basename "$jar")" in
+            ZombieBuddy.jar) continue ;;
+        esac
+        if has_game_classes "$jar" 2>/dev/null; then
+            echo "$jar"
+            return 0
+        fi
+    done
+    echo "$libs/pz-java" # default, so the error below names a real path
+}
+PZ_JAVA="$(resolve_pz_java "${1:-}")"
 if ! has_game_classes "$PZ_JAVA"; then
     echo "error: PZ game classes not found at '$PZ_JAVA'." >&2
     echo "Pass the folder containing zombie/ZomboidFileSystem.class (or the" >&2
