@@ -42,9 +42,9 @@ if (!zbJar.isFile()) {
 if (!pzHasGameClasses(pzJavaDir)) {
     throw new GradleException(
         "PZ game classes not found under pzJavaDir=${pzJavaDir}.\n" +
-        "Point -PpzJavaDir at the folder containing zombie/ZomboidFileSystem.class\n" +
-        "(or the .jar containing it). Find it with:\n" +
-        "  find <game-install-dir> -name ZomboidFileSystem.class 2>/dev/null")
+        "Point -PpzJavaDir at the game jar (e.g. projectzomboid.jar) or the\n" +
+        "folder holding the game's compiled classes, or drop\n" +
+        "projectzomboid.jar into libs/ and run ./compile.sh with no arguments.")
 }
 
 dependencies {
