@@ -203,6 +203,48 @@ check(panel.wbUpdateBtn.title == WB_Text.ForceUpdate, "button says Force update 
 check(ms.wbUpdateAllBtn.title == "Update all", "update-all count reset after per-mod update",
     ms.wbUpdateAllBtn.title)
 
+-- ---------- per-mod job status follows the selected mod ----------
+-- start a fresh update, then select other mods mid-download
+panel:updateView(fakeModInfo("SomeMod", ""))
+panel.wbUpdateBtn.onclick()
+tick(20) -- stub job needs 96 ticks to finish; still running
+check(panel.wbStatusLabel.name:find("Working") ~= nil, "in-flight job paints panel",
+    panel.wbStatusLabel.name)
+-- sibling mod (same workshop item) shows the same live status
+panel:updateView(fakeModInfo("NoMapMod", ""))
+check(panel.wbStatusLabel.name:find("Working") ~= nil, "sibling shows in-flight status",
+    panel.wbStatusLabel.name)
+-- unrelated mod: the other item's job must not scribble over it
+panel:updateView(fakeModInfo("OtherMod", ""))
+tick(10)
+check(panel.wbStatusLabel.name == "", "no cross-talk onto unrelated mod",
+    panel.wbStatusLabel.name)
+-- reselect the updating mod: live status, not a stale badge
+panel:updateView(fakeModInfo("SomeMod", ""))
+check(panel.wbStatusLabel.name:find("Working") ~= nil, "reselect shows live status",
+    panel.wbStatusLabel.name)
+tick(200) -- let it finish
+check(panel.wbStatusLabel.name == WB_Text.UpToDate, "in-flight update completes cleanly",
+    panel.wbStatusLabel.name)
+
+-- ---------- duplicate per-mod clicks coalesce ----------
+local updateCalls = 0
+local realUpdateMod = wbUpdateMod
+wbUpdateMod = function(...)
+    updateCalls = updateCalls + 1
+    return realUpdateMod(...)
+end
+panel:updateView(fakeModInfo("SomeMod", ""))
+panel.wbUpdateBtn.onclick()
+tick(5)
+panel.wbUpdateBtn.onclick() -- while in flight: coalesced, no second job
+tick(5)
+check(updateCalls == 1, "duplicate click while in flight submits once", updateCalls)
+wbUpdateMod = realUpdateMod
+tick(200)
+check(panel.wbStatusLabel.name == WB_Text.UpToDate, "coalesced update completes",
+    panel.wbStatusLabel.name)
+
 -- ---------- update-all flow ----------
 ms.wbCheckBtn.onclick()
 tick(250)

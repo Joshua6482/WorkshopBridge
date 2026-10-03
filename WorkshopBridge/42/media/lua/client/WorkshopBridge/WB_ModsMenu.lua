@@ -47,6 +47,12 @@ end
 
 local wbLastModPanel = nil -- { panel=..., modInfo=... } currently displayed
 local wbScreen = nil -- the hooked ModSelector, for button-count refreshes
+-- wsid -> { message=..., failed=bool }: per-mod update jobs in flight (or
+-- failed and not yet retried). The ModInfoPanel is a single shared instance,
+-- so without this a job's poll callbacks would scribble its status over
+-- whichever mod is currently selected, and two queued jobs would fight over
+-- the one label ("Downloading..." vs "Queued...").
+local wbModJobs = {}
 
 -- Button title reflects what we know: "Update" when a check found something
 -- new, "Force update" otherwise (clicking always re-downloads regardless).
@@ -72,6 +78,13 @@ local function WB_RefreshModPanel(panel, modInfo)
     else
         panel.wbUpdateBtn:setVisible(false)
         WB_SetLabel(panel.wbStatusLabel, WB_Text.UnknownWorkshopId)
+    end
+    -- an in-flight update (or an unretried failure) for this workshop item
+    -- overrides the label, so selecting a mod mid-download shows its live
+    -- status instead of a stale badge or a blank
+    local mj = wsid and wbModJobs[wsid]
+    if mj then
+        WB_SetLabel(panel.wbStatusLabel, mj.message)
     end
 end
 
@@ -144,6 +157,12 @@ local function WB_OnUpdateAll(ms)
                 WB_ShowError(ms, WB_Text.UpdateFailed .. ": " .. WB_ShortError(st.error, 64))
             else
                 print("[WorkshopBridge] update-all complete")
+                -- update-all handled everything: persisted per-mod failure
+                -- notes are stale now (in-flight entries, if any, are left
+                -- alone - their own onDone will settle them)
+                for k, j in pairs(wbModJobs) do
+                    if j.failed then wbModJobs[k] = nil end
+                end
                 WB_FlashMessage(ms, (st and st.message) or WB_Text.Updating)
                 -- rescan so newly downloaded/changed mods appear; then make
                 -- sure our row wrap survived (re-applied defensively)
@@ -158,34 +177,61 @@ local function WB_OnModUpdate(panel)
     local modId = panel.wbModId
     local wsid = WB_WorkshopIdFor(modId)
     if not wsid or type(wbUpdateMod) ~= "function" then return end
+    -- coalesce: an update for this workshop item is already in flight, so
+    -- just (re)show its status instead of queueing a duplicate download.
+    -- A previous failure does not coalesce: the user is retrying.
+    local inflight = wbModJobs[wsid]
+    if inflight and not inflight.failed then
+        WB_SetLabel(panel.wbStatusLabel, inflight.message)
+        return
+    end
     local ok, jobId = pcall(wbUpdateMod, wsid)
     if not ok or not jobId then
         WB_SetLabel(panel.wbStatusLabel, WB_Text.UpdateFailed)
         return
     end
+    wbModJobs[wsid] = { message = WB_Text.Updating }
     WB_SetLabel(panel.wbStatusLabel, WB_Text.Updating)
     print("[WorkshopBridge] updating " .. tostring(modId)
         .. " (workshop " .. tostring(wsid) .. ", job " .. tostring(jobId) .. ")")
     WB_TrackJob(jobId, {
         onUpdate = function(st)
-            WB_SetLabel(panel.wbStatusLabel, st.message or WB_Text.Updating)
+            local msg = (st and st.message) or WB_Text.Updating
+            local j = wbModJobs[wsid]
+            if j then j.message = msg end
+            -- only paint while the panel is still showing this workshop
+            -- item (a sibling mod counts: same download, same result).
+            -- Otherwise this job would scribble over the selected mod's
+            -- own status, or fight a queued job over the one label.
+            if WB_WorkshopIdFor(panel.wbModId) == wsid then
+                WB_SetLabel(panel.wbStatusLabel, msg)
+            end
         end,
         onDone = function(st)
-            if st and st.state == "failed" then
+            local failed = st and st.state == "failed"
+            if failed then
                 print("[WorkshopBridge] update of " .. tostring(modId)
                     .. " failed: " .. tostring(st.error or "?"))
-                WB_SetLabel(panel.wbStatusLabel,
-                    WB_Text.UpdateFailed .. ": " .. WB_ShortError(st.error, 48))
+                -- persist the failure: reselecting the mod still shows it
+                -- (until the next update attempt for this item)
+                wbModJobs[wsid] = {
+                    message = WB_Text.UpdateFailed .. ": " .. WB_ShortError(st.error, 48),
+                    failed = true,
+                }
             else
                 print("[WorkshopBridge] update of " .. tostring(modId) .. " complete")
-                WB_SetLabel(panel.wbStatusLabel, WB_Text.UpToDate)
+                wbModJobs[wsid] = nil
                 -- clear by workshop id: the download updated the whole
                 -- item, so sibling mods from the same item stop showing
                 -- "update available" too
                 WB_UnmarkUpdateAvailable(wsid)
-                WB_RefreshModButtonTitle(panel, modId)
                 -- the Update-all count dropped by one as well
                 WB_RefreshUpdateAllButton(wbScreen, WB_CountUpdateAvailable())
+            end
+            if WB_WorkshopIdFor(panel.wbModId) == wsid then
+                WB_SetLabel(panel.wbStatusLabel,
+                    failed and wbModJobs[wsid].message or WB_Text.UpToDate)
+                WB_RefreshModButtonTitle(panel, panel.wbModId)
             end
         end,
     })

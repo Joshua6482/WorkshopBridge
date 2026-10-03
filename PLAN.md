@@ -113,12 +113,14 @@ planned properly.
   panel via the normal message path). Removes the concurrent-steamcmd
   question and the shared-panel flicker entirely.
 
-- [ ] **Per-mod "Updating..." cleared on selection change (minor).**
-  The stuck-forever case is fixed (the update() fallback pump delivers
-  onDone now). Remaining cosmetic: selecting another mod mid-update and
-  coming back clears the "Updating..." label, since `updateView` doesn't
-  know about in-flight jobs. Fix if it annoys: track in-progress jobs per
-  mod id and render from that in `WB_RefreshModPanel`.
+- [x] **Per-mod job status vs. selection (fixed Oct 2026).** The per-mod
+  job's poll callbacks used to write to the shared ModInfoPanel unconditionally,
+  so selecting another mod mid-download showed the wrong job's text, and two
+  queued jobs fought over the one label ("Downloading..." vs "Queued...").
+  Now per-mod jobs are tracked per workshop item: callbacks only paint while
+  the panel shows that item (siblings included), reselecting mid-download shows
+  live status, duplicate clicks coalesce instead of queueing, failures persist
+  on reselect until retried, and update-all clears stale failure notes.
 
 - [ ] **Mod menu UI refresh without restart/lua reload.** After an
   install/update, the Mods menu list should reflect the change. We already

@@ -127,7 +127,7 @@ Hardening (Oct 2026, from an external audit):
 
 ### Single mod update
 1. Lua: per-mod button → `wbGetWorkshopId(modId)` → `wbUpdateMod(workshopId)` → jobId. The button reads **Update** when a check flagged the mod, **Force update** otherwise (it always re-downloads; it never checks first).
-2. Lua polls with the progress panel; the row label tracks the job ("Updating...", "Queued...", "Up to date" / failure). On success the update-available flag clears for the whole workshop item, so sibling mods from the same item lose their badges and the **Update all** count drops too.
+2. Lua polls with the progress panel; the row label tracks the job ("Updating...", "Queued...", "Up to date" / failure). On success the update-available flag clears for the whole workshop item, so sibling mods from the same item lose their badges and the **Update all** count drops too. Per-mod jobs are tracked per workshop item: a second click while one is in flight coalesces instead of queueing a duplicate, and the panel label only ever shows the job for the workshop item currently selected (selecting another mod mid-download shows its live status on return, never another job's text).
 3. Java (serialized with other downloads): download → move into `Zomboid/mods/` (replace existing) → update map → job `done`.
 
 ### Update all
