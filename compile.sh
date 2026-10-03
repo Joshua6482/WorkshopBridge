@@ -93,6 +93,17 @@ resolve_pz_java() {
     PZ_JAVA="$libs/pz-java" # default, so the error below names a real path
 }
 resolve_pz_java "${1:-}"
+# Expand a leading ~ (env-provided paths are not tilde-expanded by the shell)
+# before validation, and absolutize: Gradle resolves -PpzJavaDir relative
+# to the project dir (java-src), which is not where this script runs, so it
+# must get an absolute path. (This is what broke the auto-detected
+# libs/projectzomboid.jar: Gradle looked for it under java-src/ and failed
+# its own check on a path that validated fine.)
+PZ_JAVA="${PZ_JAVA/#\~/$HOME}"
+case "$PZ_JAVA" in
+    /*) ;;
+    *) PZ_JAVA="$PWD/$PZ_JAVA" ;;
+esac
 if ! has_game_classes "$PZ_JAVA"; then
     echo "error: PZ game classes not found at '$PZ_JAVA'." >&2
     if [ -n "$REJECTED_JARS" ]; then
