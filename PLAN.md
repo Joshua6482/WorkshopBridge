@@ -106,6 +106,15 @@ planned properly.
   check found an update for that mod, "Force update" otherwise (clicking
   always re-downloads; per-mod update never checks first). The visible mod
   panel refreshes on check completion without reselecting.
+- [x] **In-game backend unload investigated, declined (Oct 2026).** True
+  unloading is impossible (ZombieBuddy loads our jar into the app
+  classloader, which lives for the JVM lifetime). A `wbShutdown()` on
+  `OnGameStart` was considered and rejected: idle in-game cost is ~0 (0-4
+  parked daemon threads, <1MB heap, one no-op OnTick handler), while shutdown
+  risks killing mid-install downloads (interrupted installs would land
+  unmapped as "Unknown workshop ID") and orphaned steamcmd processes. The
+  lazy design already gives the important property: zero threads/network
+  until first use, and cached-pool threads self-terminate.
 - [x] **Serialized downloads (Oct 2026).** Download-bearing jobs
   (`submitUpdate`, `submitUpdateAll`) run on a dedicated single-thread
   executor; checks stay on the cached pool. A waiting job reports
