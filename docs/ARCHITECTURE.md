@@ -34,6 +34,14 @@
 Exposed as **plain Lua globals** (`wbIsAvailable()` etc.) via
 `@LuaMethod(name = ..., global = true)`.
 
+Cold-boot note: ZombieBuddy's automatic `@LuaMethod` discovery runs in its
+`afterExposeAll` phase, which fires *before* our jar is loaded (our jar is
+found via the `loadMods` hook), so on a cold boot the wb* globals were never
+registered until a Lua reload. `Main.main` therefore registers
+`SteamCmdApi` manually (reflective `addClassWithGlobalLuaMethod` + immediate
+`exposeGlobalFunctions`, mirroring `afterExposeAll`), degrading gracefully on
+other ZB versions.
+
 | Function | Args | Returns |
 |---|---|---|
 | `wbIsAvailable()` | - | `true` when the Java side loaded (Lua uses this to detect ZombieBuddy presence) |

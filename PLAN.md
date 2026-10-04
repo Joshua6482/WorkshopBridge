@@ -130,6 +130,17 @@ planned properly.
   the panel shows that item (siblings included), reselecting mid-download shows
   live status, duplicate clicks coalesce instead of queueing, failures persist
   on reselect until retried, and update-all clears stale failure notes.
+- [x] **Cold-boot Lua exposure (fixed Oct 2026).** On first boot the wb* Lua
+  globals were missing until a Lua reload. Root-caused from the game log:
+  ZB's automatic @LuaMethod discovery runs in its afterExposeAll phase, which
+  fires BEFORE our jar is loaded (our jar is found via the loadMods hook), so
+  our globals were never registered; the Lua-reset log showed our class
+  exposed in afterExposeAll because the jar was already known by then. Fix:
+  Main.main now manually registers SteamCmdApi with ZB's Exposer
+  (reflective addClassWithGlobalLuaMethod + immediate exposeGlobalFunctions,
+  mirroring what afterExposeAll does), degrading gracefully on ZB versions
+  without those entry points. Covered by Java test section 17
+  (Exposer/LuaManager stubs). Needs joshua's cold-boot verification.
 
 - [x] **Mod menu UI refresh without restart/lua reload.** Root-caused via the
   game decompile (Oct 2026): `ms:reloadMods()` rebuilds the menu model from
