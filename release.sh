@@ -200,11 +200,11 @@ echo
 TAG="v$VERSION"
 if [ -z "$ASSUME_YES" ] && command -v gh >/dev/null 2>&1; then
     if confirm "Create GitHub release $TAG and upload the zip?"; then
-        gh release create "$TAG" --title "WorkshopBridge $VERSION" \
+        gh release create "$TAG" --title "V$VERSION" \
             --notes-file "$NOTES" "$ZIP"
         exit 0
     fi
 fi
 echo "To publish manually:"
-echo "  gh release create $TAG --title \"WorkshopBridge $VERSION\" \\"
+echo "  gh release create $TAG --title \"V$VERSION\" \\"
 echo "    --notes-file \"$NOTES\" \"$ZIP\""
