@@ -55,10 +55,9 @@ public final class WorkshopMap {
     }
 
     /**
-     * Repairs a stale recorded mod id (e.g. a folder name recorded when the
-     * mod.info layout wasn't parsed, or an author typo in the folder name):
-     * swaps {@code oldModId} for {@code newModId} in the workshop item's
-     * entry and persists. No-op when the entry or old id is absent.
+     * Repairs a stale recorded mod id (e.g. change in broken parse logic, 
+     * folder renamed, etc).
+     * No-op when the entry or old id is absent.
      */
     public synchronized void replaceModId(String workshopId, String oldModId, String newModId) {
         Entry e = items.get(workshopId);
@@ -136,8 +135,7 @@ public final class WorkshopMap {
             root.put("version", 1);
             root.put("items", itemsMap);
             String json = Json.stringify(root);
-            // write-then-move: a crash mid-save must never leave a truncated
-            // map behind (that would silently orphan every tracked mod)
+            // atomic
             Path target = file.toPath();
             Path tmp = target.resolveSibling(file.getName() + ".tmp");
             Path parent = target.getParent();

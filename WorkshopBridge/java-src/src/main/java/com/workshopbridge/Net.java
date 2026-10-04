@@ -9,11 +9,7 @@ import java.net.http.HttpConnectTimeoutException;
 /**
  * Turns raw network failures into messages a player can act on.
  *
- * There is deliberately no pre-flight "is the internet up" probe - we attempt
- * the operation and translate the failure instead. A probe would add latency
- * to every operation and can lie (captive portals, flaky DNS); the attempt
- * itself is the honest check. Failures surface to the Lua UI through the
- * job's {@code error} field ("Update failed: ...").
+ * There is deliberately no pre-flight.
  */
 public final class Net {
     private Net() {}

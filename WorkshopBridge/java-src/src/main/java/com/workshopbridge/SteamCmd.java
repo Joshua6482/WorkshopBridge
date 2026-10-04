@@ -98,9 +98,8 @@ public final class SteamCmd {
     /**
      * Prefix prepended to steamcmd invocations on systems that cannot run
      * Valve's prebuilt binaries directly. On NixOS there is no
-     * /lib/ld-linux.so.2, so foreign binaries need steam-run (or a
-     * system-wide nix-ld, in which case no prefix is needed and none is
-     * applied). Empty everywhere else.
+     * /lib/ld-linux.so.2, so foreign binaries need steam-run. 
+     * Empty everywhere else.
      */
     private static final List<String> LAUNCH_PREFIX = computeLaunchPrefix();
 
@@ -424,13 +423,13 @@ public final class SteamCmd {
             // "no FHS" symptom, surfacing one step earlier than the 32-bit
             // loader problem below.
             return " On NixOS, Valve's steamcmd needs an FHS environment to launch:"
-                    + " install steam-run from nixpkgs (or enable nix-ld), make sure it is"
+                    + " install steam-run from nixpkgs, make sure it is"
                     + " on PATH when you start the game, and retry.";
         }
         if (low.contains("shared librar") || low.contains("exit=127")) {
             if (nixos) {
                 return " NixOS cannot run Valve's prebuilt steamcmd directly: install"
-                        + " steam-run from nixpkgs (or enable nix-ld) and retry.";
+                        + " steam-run from nixpkgs and retry.";
             }
             return " This usually means the 32-bit runtime libraries are missing."
                     + " Debian/Ubuntu: sudo apt install lib32gcc-s1 lib32stdc++6 |"
