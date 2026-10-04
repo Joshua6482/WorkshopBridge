@@ -16,7 +16,7 @@ public class Main {
                 + "wbCheckForUpdates, wbUpdateAll, wbUpdateMod, wbInvalidateModCaches, "
                 + "wbGetJobStatus, wbOpenWorkshopPage, wbExportModList, "
                 + "wbImportMods, wbImportCollection, wbAdoptMod, wbCheckDependencies, "
-                + "wbGetServerMods)");
+                + "wbGetServerMods, wbGetModIds, wbDeleteMod)");
         runDiagnostics();
     }
 

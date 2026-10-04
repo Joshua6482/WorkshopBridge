@@ -57,6 +57,8 @@ gracefully on other ZombieBuddy versions.
 | `wbOpenWorkshopPage(workshopId)` | workshop ID | `true` if a browser launches. Tries `java.awt.Desktop.browse()`, then `xdg-open`/`gio open` (Linux), `open` (macOS), or `cmd /c start` (Windows). Validates the ID as digits before using it in a command |
 | `wbCheckDependencies(workshopId)` | workshop ID | jobId; resolves the item's workshop "required items" (transitively, best-effort page scrape); the job's `deps` status field lists `{id, title, installed}` |
 | `wbGetServerMods()` | - | **JSON string** `{"steamMode", "mods":[{"id","workshopId","name","installed"}]}` read from the failed join's `connectionDetails` packet (deterministic parse, magic-int validated; `steamMode=true` means the vanilla workshop flow owns it), or null when there is no join to read or the packet is unrecognized |
+| `wbGetModIds(workshopId)` | workshop ID | **JSON string** array of the mod IDs recorded for the item, or null when untracked. Used by the delete dialog to list sub-mods |
+| `wbDeleteMod(workshopId, modId)` | workshop ID (nil/empty for manual mods) + PZ mod id | **JSON string** `{"deleted":[],"skipped":{"id":"reason"},"failed":[]}`. With a tracked ID, deletes every mod folder in the entry and drops the entry (so update-all can't resurrect it); otherwise deletes one manually-installed folder. Every folder passes `ModDeleter`'s guards or is reported, never silently removed |
 
 ### Job status shape (JSON string, decoded in Lua by WB_Json)
 
@@ -146,6 +148,11 @@ cached pool. Waiting downloads report `"Queued..."` until they start.
 3. A dialog on the `ConnectToServer` screen lists every missing mod: downloadable ones (workshop ID known) with **Download all**, and manual-install ones (no workshop ID, e.g. transitive `mod.info` `require=` deps) dimmed. No workshop "required items" lookup runs here: the server already enumerates what it needs.
 4. **Download all** runs one `wbImportMods` job (force-install, so a stale map entry cannot no-op it), then `wbInvalidateModCaches()` so the rejoin's mod check sees the new mods, and reports "Downloaded. Go back and rejoin the server."
 
+### Delete a mod (not yet verified in-game)
+1. Lua: **Delete** under Open in Workshop (shown for WB-tracked and manually-installed mods, never Steam-managed) opens a confirm dialog. For tracked items it lists the sub-mods from `wbGetModIds` ("Deleting this mod will also delete the following mods:"); for manual mods just the one. Nothing is deleted until the user confirms.
+2. Java (`ModDeleter`, synchronous - local filesystem, fast): every folder passes guards or is reported, never silently removed. The folder must be the one the game resolves for the mod id (`ZomboidFileSystem.getModDir`, never a hand-built path), its canonical path must lie strictly inside the mods dir, its `mod.info` must declare the expected id, and it must not still be claimed by another map entry. Deleting a tracked item drops its map entry, so a later "update all" cannot re-download the deleted mod. A folder that could not be removed keeps its entry so a retry still finds it.
+3. Lua flashes "Deleted" (or the kept folders with reasons on a partial delete), then `wbInvalidateModCaches()` + `ms:reloadMods()`.
+
 ### First run / missing pieces
 - Without ZombieBuddy, the game refuses to load the mod because `mod.info` requires it. Its javaagent prompt handles setup; our earlier in-game guidance was unreachable.
 - On first run, `Zomboid/workshopbridge.properties` is created with comments for each setting. The only setting is `steamcmd.path`, an executable-validated override that takes precedence over the managed copy. Existing files are never overwritten.
@@ -158,7 +165,7 @@ cached pool. Waiting downloads report `"Queued..."` until they start.
 - **More tools** (not yet verified in-game) joins the same cluster.
 - **Per-row status:** wrap `ModListBox:doDrawItem` at class level and key text by `item.item`'s mod ID; the method receives a row wrapper, not `modData`. Class-level wrapping lets patches installed later (such as ModFolders on `OnMainMenuEnter`) chain regardless of load order. Rows are not widgets, so buttons would require manual hit-testing. The modID-to-workshopID lookup is memoized per mod ID (a Java miss scans every mod folder, and rows draw every frame); `WB_RefreshModList` clears the memo, which every install path calls.
 - **Wrapper rule: propagate return values.** Vanilla `prerender` uses the result of `doDrawItem` to set row height, so wrappers must forward arguments and returns.
-- **Per-mod Update button/status:** `ModInfoPanel.createChildren()` runs once; `updateView(modInfo)` runs on selection. The button reads **Update** when a check flags the mod, otherwise **Force update**. **Adopt...** (verified in-game Oct 2026) replaces it for "Unknown workshop ID"; **Open in Workshop** appears below when an ID is known.
+- **Per-mod Update button/status:** `ModInfoPanel.createChildren()` runs once; `updateView(modInfo)` runs on selection. The button reads **Update** when a check flags the mod, otherwise **Force update**. **Adopt...** (verified in-game Oct 2026) replaces it for "Unknown workshop ID"; **Open in Workshop** appears below when an ID is known; **Delete** (not yet verified in-game) sits under that for WB-tracked and manually-installed mods, never Steam-managed.
 - Row states (three): in our map → per-mod button (+ "Update available" badge after a check); game's `getWorkshopID()` non-empty → "Managed by Steam"; else grey "Unknown workshop ID".
 - Wrapping is idempotent per instance and re-applied by `WB_RefreshModList` after update-all, per-mod update, and download reloads.
 - **Server-join prompt** (not yet verified in-game): `WB_ServerJoin` hooks `Events.OnConnectFailed` and parents its dialog to the visible `ConnectToServer` screen (vanilla shows failures as label text there, not a modal).

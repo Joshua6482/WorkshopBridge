@@ -110,6 +110,99 @@ public class WBTest {
         d.write(b);
     }
 
+    /**
+     * Creates a fake installed mod: mods/&lt;folder&gt;/common/mod.info
+     * declaring id=&lt;modId&gt;, and registers it in the stub game lookup.
+     */
+    static File makeTestMod(Backend backend, String folder, String modId) throws Exception {
+        File dir = new File(backend.modsDir(), folder);
+        File common = new File(dir, "common");
+        if (!common.mkdirs() && !common.isDirectory()) {
+            throw new java.io.IOException("cannot create " + common);
+        }
+        Files.writeString(new File(common, "mod.info").toPath(),
+                "id=" + modId + "\nname=" + modId + "\n",
+                java.nio.charset.StandardCharsets.UTF_8);
+        zombie.ZomboidFileSystem.modIdToDir.put(modId, dir.getAbsolutePath());
+        return dir;
+    }
+
+    static void testModDeletion(Backend backend) throws Exception {
+    // ---- 2e. mod deletion ----
+    // tracked item with two sub-mods: both folders go, entry dropped
+    File delA = makeTestMod(backend, "DelModA", "DelModA");
+    File delB = makeTestMod(backend, "DelModB", "DelModB");
+    backend.workshopMap().record("555", java.util.List.of("DelModA", "DelModB"), 1000L);
+    ModDeleter.Result del = ModDeleter.deleteWorkshopItem(backend, "555");
+    check(del.ok() && del.deleted.containsAll(java.util.List.of("DelModA", "DelModB")),
+            "delete: tracked sub-mods removed", del.deleted);
+    check(!delA.exists() && !delB.exists(), "delete: folders gone");
+    check(!backend.workshopMap().snapshot().containsKey("555"),
+            "delete: map entry dropped so update-all can't resurrect it");
+    // a sub-mod still claimed by another entry is kept
+    File shared = makeTestMod(backend, "SharedMod", "SharedMod");
+    File other = makeTestMod(backend, "OtherMod", "OtherMod");
+    backend.workshopMap().record("556", java.util.List.of("SharedMod"), 1000L);
+    backend.workshopMap().record("557", java.util.List.of("SharedMod", "OtherMod"), 1000L);
+    ModDeleter.Result del2 = ModDeleter.deleteWorkshopItem(backend, "557");
+    check(del2.skipped.containsKey("SharedMod") && del2.deleted.contains("OtherMod"),
+            "delete: co-claimed sub-mod kept, other removed", del2.skipped);
+    check(shared.exists() && !other.exists(), "delete: kept folder untouched");
+    check(backend.workshopMap().snapshot().containsKey("556"),
+            "delete: other entry intact");
+    // folder whose mod.info disagrees is never wiped
+    File mismatch = makeTestMod(backend, "MismatchMod", "SomeOtherId");
+    zombie.ZomboidFileSystem.modIdToDir.put("MismatchMod", mismatch.getAbsolutePath());
+    backend.workshopMap().record("558", java.util.List.of("MismatchMod"), 1000L);
+    ModDeleter.Result del3 = ModDeleter.deleteWorkshopItem(backend, "558");
+    check(del3.skipped.containsKey("MismatchMod") && mismatch.exists(),
+            "delete: mod.info mismatch -> folder kept", del3.skipped);
+    // a "mod folder" outside the mods dir is never touched
+    File outside = new File(new File(System.getProperty("wb.test.zomboid")), "outside-mod");
+    new File(outside, "common").mkdirs();
+    Files.writeString(new File(outside, "common/mod.info").toPath(), "id=OutsideMod\n",
+            StandardCharsets.UTF_8);
+    zombie.ZomboidFileSystem.modIdToDir.put("OutsideMod", outside.getAbsolutePath());
+    ModDeleter.Result del4 = ModDeleter.deleteModFolder(backend, "OutsideMod");
+    check(del4.skipped.containsKey("OutsideMod") && outside.exists(),
+            "delete: outside-mods-dir folder kept", del4.skipped);
+    // manual (untracked) mod: folder goes, tracked one is refused
+    File manual = makeTestMod(backend, "ManualMod", "ManualMod");
+    ModDeleter.Result del5 = ModDeleter.deleteModFolder(backend, "ManualMod");
+    check(del5.ok() && !manual.exists(), "delete: manual mod folder removed");
+    File tracked = makeTestMod(backend, "TrackedMod", "TrackedMod");
+    backend.workshopMap().record("559", java.util.List.of("TrackedMod"), 1000L);
+    ModDeleter.Result del6 = ModDeleter.deleteModFolder(backend, "TrackedMod");
+    check(!del6.ok() && tracked.exists(),
+            "delete: tracked mod refused via single-folder path", del6.skipped);
+    // unknown mod id: nothing to do, nothing harmed
+    ModDeleter.Result del7 = ModDeleter.deleteModFolder(backend, "NopeMod");
+    check(!del7.ok() && del7.deleted.isEmpty(), "delete: unknown id -> skip");
+    // bridges
+    backend.workshopMap().record("560", java.util.List.of("DelModA", "DelModB"), 1000L);
+    Object gotIds = Json.parse(SteamCmdApi.wbGetModIds("560"));
+    check(gotIds instanceof java.util.List
+                    && ((java.util.List<?>) gotIds).containsAll(
+                            java.util.List.of("DelModA", "DelModB")),
+            "wbGetModIds returns the entry's mod ids", gotIds);
+    check(SteamCmdApi.wbGetModIds("nope") == null,
+            "wbGetModIds unknown item -> null");
+    check(SteamCmdApi.wbDeleteMod(null, null) == null,
+            "wbDeleteMod blank id -> null");
+    // tidy up: entries and folders this section left behind
+    for (String wsid : new String[] { "556", "559", "560" }) {
+        backend.workshopMap().remove(wsid);
+    }
+    for (String f : new String[] { "SharedMod", "MismatchMod", "TrackedMod" }) {
+        ModInstaller.deleteRecursiveQuiet(
+                new File(backend.modsDir(), f).toPath(), s -> {});
+    }
+    ModInstaller.deleteRecursiveQuiet(
+            new File(System.getProperty("wb.test.zomboid"), "outside-mod").toPath(),
+            s -> {});
+    zombie.ZomboidFileSystem.modIdToDir.clear();
+    }
+
     public static void main(String[] args) throws Exception {
         String zomboidProp = System.getProperty("wb.test.zomboid");
         if (zomboidProp == null || zomboidProp.isEmpty()) {
@@ -307,6 +400,7 @@ public class WBTest {
 
         // ---- 3. Backend + atomic map save ----
         Backend backend = Backend.get();
+        testModDeletion(backend);
         File zomboidDir = backend.zomboidDir();
         check(zomboidDir.getAbsolutePath()
                 .equals(new File(System.getProperty("wb.test.zomboid")).getAbsolutePath()),

@@ -19,6 +19,12 @@ public class ZomboidFileSystem {
     public void resetModFolders() {
         resetModFoldersCalled = true;
     }
+    /** Test hook: mod id -> mod folder, backing getModDir. */
+    public static final java.util.Map<String, String> modIdToDir = new java.util.HashMap<>();
+    /** Mirrors the real lookup: the folder the game resolves for a mod id. */
+    public String getModDir(String modId) {
+        return modIdToDir.get(modId);
+    }
     /**
      * Test port of the game's version-dir picker (ZomboidFileSystem.
      * getModVersionDirName): highest version-like dir at or below the game

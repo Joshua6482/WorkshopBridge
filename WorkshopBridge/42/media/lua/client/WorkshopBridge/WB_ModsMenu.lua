@@ -21,6 +21,7 @@ require "WorkshopBridge/WB_Jobs"
 require "WorkshopBridge/WB_Download"
 require "WorkshopBridge/WB_Tools"
 require "WorkshopBridge/WB_Adopt"
+require "WorkshopBridge/WB_Delete"
 require "WorkshopBridge/WB_Dependencies"
 
 -- ---------- helpers ----------
@@ -75,16 +76,19 @@ local function WB_RefreshModPanel(panel, modInfo)
     if wsid then
         panel.wbUpdateBtn:setVisible(true)
         if panel.wbAdoptBtn then panel.wbAdoptBtn:setVisible(false) end
+        if panel.wbDeleteBtn then panel.wbDeleteBtn:setVisible(true) end
         WB_SetLabel(panel.wbStatusLabel,
             WB_IsUpdateAvailable(modId) and WB_Text.UpdateAvailableBadge or "")
         WB_RefreshModButtonTitle(panel, modId)
     elseif gameWsid then
         panel.wbUpdateBtn:setVisible(false)
         if panel.wbAdoptBtn then panel.wbAdoptBtn:setVisible(false) end
+        if panel.wbDeleteBtn then panel.wbDeleteBtn:setVisible(false) end
         WB_SetLabel(panel.wbStatusLabel, WB_Text.ManagedBySteam)
     else
         panel.wbUpdateBtn:setVisible(false)
         if panel.wbAdoptBtn then panel.wbAdoptBtn:setVisible(true) end
+        if panel.wbDeleteBtn then panel.wbDeleteBtn:setVisible(true) end
         WB_SetLabel(panel.wbStatusLabel, WB_Text.UnknownWorkshopId)
     end
     -- an in-flight update (or an unretried failure) for this workshop item
@@ -429,10 +433,11 @@ local function WB_AddModPanelControls(panel)
     if panel.wbControlsAdded then return end
     panel.wbControlsAdded = true
     -- stacked: update/force-update on top, open-in-workshop under it,
-    -- status label above both. block is bottom-anchored with a 10px margin.
+    -- delete under that; status label above all. block is bottom-anchored
+    -- with a 10px margin.
     local w, h = 130, 25
     local x = 10
-    local y = math.max(40, panel:getHeight() - 2 * h - 6 - 10)
+    local y = math.max(40, panel:getHeight() - 3 * h - 2 * 6 - 10)
     panel.wbUpdateBtn = ISButton:new(x, y, w, h, WB_Text.ForceUpdate, panel,
         function() WB_OnModUpdate(panel) end)
     panel.wbUpdateBtn:initialise()
@@ -443,6 +448,13 @@ local function WB_AddModPanelControls(panel)
     panel.wbWorkshopBtn:initialise()
     panel.wbWorkshopBtn:instantiate()
     panel:addChild(panel.wbWorkshopBtn)
+    -- delete: for WB-tracked and manually-installed mods alike, never
+    -- Steam-managed (Steam owns those files)
+    panel.wbDeleteBtn = ISButton:new(x, y + 2 * h + 12, w, h, WB_Text.Delete, panel,
+        function() WB_OnDelete(panel) end)
+    panel.wbDeleteBtn:initialise()
+    panel.wbDeleteBtn:instantiate()
+    panel:addChild(panel.wbDeleteBtn)
     -- adopt button: same slot as the update button (they never show together)
     panel.wbAdoptBtn = ISButton:new(x, y, w, h, WB_Text.Adopt, panel,
         function() WB_OnAdopt(panel) end)

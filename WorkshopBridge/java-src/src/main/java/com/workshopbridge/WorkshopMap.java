@@ -85,6 +85,16 @@ public final class WorkshopMap {
         save();
     }
 
+    /**
+     * Drops a workshop entry (mod deletion). No-op when absent.
+     * Atomic save, like every other mutation.
+     */
+    public synchronized void remove(String workshopId) {
+        if (items.remove(workshopId) != null) {
+            save();
+        }
+    }
+
     public synchronized void load() {
         items.clear();
         if (!file.isFile()) {
