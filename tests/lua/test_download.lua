@@ -175,5 +175,27 @@ check(dlg3 ~= nil, "dialog reopens")
 dlg3.cancelBtn.onclick()
 check(ms.wbDownloadDialog == nil, "cancel closes dialog")
 
+-- ---------- dependency check gated by mod option ----------
+local realCheckDeps = WB_CheckDependencies
+local realDepsOpt = WB_GetCheckDependenciesAfterDownload
+local depsCalls = 0
+WB_CheckDependencies = function(...) depsCalls = depsCalls + 1 end
+ms.wbDownloadBtn.onclick()
+local dlg4 = ms.wbDownloadDialog
+dlg4.entry:setText("999888777")
+dlg4.downloadBtn.onclick()
+tick(200)
+check(depsCalls == 1, "dependencies checked after download when option on",
+    depsCalls)
+WB_GetCheckDependenciesAfterDownload = function() return false end
+ms.wbDownloadBtn.onclick()
+local dlg5 = ms.wbDownloadDialog
+dlg5.entry:setText("999888777")
+dlg5.downloadBtn.onclick()
+tick(200)
+check(depsCalls == 1, "dependencies skipped when option off", depsCalls)
+WB_CheckDependencies = realCheckDeps
+WB_GetCheckDependenciesAfterDownload = realDepsOpt
+
 print(failures == 0 and "ALL DOWNLOAD TESTS PASSED" or (failures .. " FAILURES"))
 os.exit(failures == 0 and 0 or 1)

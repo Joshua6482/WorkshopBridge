@@ -475,7 +475,7 @@ public final class JobManager {
         List<String> modIds = ModInstaller.install(
                 itemDir, backend.modsDir(),
                 new File(backend.cacheDir(), ".install-staging"),
-                workshopId, timeUpdated,
+                workshopId, timeUpdated, backend.isSidecarEnabled(),
                 line -> System.out.println("[WorkshopBridge] " + line));
         removeStaleSubMods(workshopId, prev == null ? List.of() : prev.modIds, modIds);
         backend.workshopMap().record(workshopId, modIds, timeUpdated);

@@ -214,6 +214,17 @@ fireConnectFailed(FAIL_MSG)
 local dlg2 = screen.wbServerModsDialog
 fireConnectFailed(FAIL_MSG)
 check(screen.wbServerModsDialog == dlg2, "second failure reuses the dialog")
+if dlg2 then dlg2.closeBtn.onclick() end
+
+-- ---------- 11. offer option off -> silent ----------
+local realOfferOpt = WB_GetOfferServerModDownloads
+WB_GetOfferServerModDownloads = function() return false end
+serverModsJson = serverMods({ smod("supermod", "111", "Super Mod", false) })
+fireConnectFailed(FAIL_MSG) -- must not error
+check(screen.wbServerModsDialog == nil, "no dialog when the offer option is off")
+WB_GetOfferServerModDownloads = realOfferOpt
+fireConnectFailed(FAIL_MSG)
+check(screen.wbServerModsDialog ~= nil, "dialog returns when option is back on")
 
 if failures > 0 then print(failures .. " FAILURES") os.exit(1) end
 print("ALL SERVERJOIN TESTS PASSED")

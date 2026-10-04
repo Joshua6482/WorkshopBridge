@@ -14,6 +14,7 @@
 -- big mod lists.
 require "WorkshopBridge/WB_Config"
 require "WorkshopBridge/WB_Jobs"
+require "WorkshopBridge/WB_Options"
 
 -- Parses the game's CheckMods failure message:
 --   "<translated text> [ModID: abc, WorkshopID: 123]"
@@ -37,6 +38,9 @@ local function entryName(e)
 end
 
 function WB_OnConnectFailed(message)
+    -- checked at event time (not at hook registration): the option value
+    -- is only meaningful once the options screen has loaded it
+    if not WB_GetOfferServerModDownloads() then return end
     local modId, wsId = parseModRequired(message)
     if not modId then return end
     if type(wbGetServerMods) ~= "function" then return end

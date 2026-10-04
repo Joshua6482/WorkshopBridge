@@ -111,6 +111,35 @@ cached pool. Waiting downloads report `"Queued..."` until they start.
   from a typo or previously unparsed layout) are repaired to the `mod.info`
   ID.
 - `timeUpdated` comes from `GetPublishedFileDetails`; compared against the workshop on update checks.
+- Every installed mod folder also carries a `workshopbridge.json` sidecar
+  (`workshopId`, `modId`, `timeUpdated`, `lastDownloaded`), stamped into the
+  staging tree before the atomic rename. The map stays the ground truth:
+  the stamp is only consulted when the map misses, then merged back in
+  (`WorkshopMap.mergeSidecar`). A stamp whose mod id no longer matches the
+  folder's `mod.info` is stale and ignored, as are corrupt stamps; deleting
+  the file opts a folder out of re-linking. This is what makes the manual
+  archive workflow just work: move a folder out and back, it re-links.
+- Check / update-all / dependency jobs first prune map entries whose mod
+  folders are gone from disk (`JobManager.reconcileMapWithModsDir` +
+  `WorkshopMap.removeModIds`): fully-missing entries are dropped,
+  partially-missing ones lose just the missing mod ids. In-flight
+  downloads are skipped and an unlistable mods dir prunes nothing, so a
+  hand-deleted mod is no longer queried and update-all cannot resurrect it.
+
+## Mod options (Options > Mods > WorkshopBridge)
+
+Via the vanilla `PZAPI.ModOptions` system, persisted to `ModOptions.ini`:
+
+- "Refresh mod list after each download" (default on).
+- "Check for required workshop items after download" (default on): gates
+  the dependency prompt after download/adopt.
+- "Offer downloads when joining a modded server" (default on): gates the
+  `OnConnectFailed` download offer.
+- "Tag mod folders with Workshop info" (default on): gates the sidecar
+  stamp write and the re-link. The Java side reads this option straight
+  from `<Zomboid>/Lua/ModOptions.ini` (`ModOptionsIni`: vanilla
+  `tickbox|<modId>|<optionId>|true` lines, last wins), so applying it takes
+  effect without a restart; missing file/option degrades to on.
 
 ## Flows
 

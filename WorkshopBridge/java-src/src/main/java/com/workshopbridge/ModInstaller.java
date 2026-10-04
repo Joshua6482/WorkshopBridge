@@ -42,14 +42,15 @@ public final class ModInstaller {
      * on the same filesystem as {@code modsDir} for the renames to stay
      * atomic (a subdirectory of the workshop cache satisfies this).
      * Each installed mod folder gets a {@link ModSidecar} stamp carrying
-     * {@code workshopId}/{@code timeUpdated} (skipped when
-     * {@code workshopId} is blank); the stamp is written into the staging
-     * tree before the atomic rename, so a live mod folder always carries
-     * a current stamp.
+     * {@code workshopId}/{@code timeUpdated} when {@code writeSidecar} is
+     * true and {@code workshopId} is non-blank (skipped otherwise); the
+     * stamp is written into the staging tree before the atomic rename, so
+     * a live mod folder always carries a current stamp.
      * Returns the installed PZ mod ids (from each mod.info {@code id=} line).
      */
     public static List<String> install(File itemDir, File modsDir, File stageDir,
-            String workshopId, long timeUpdated, Consumer<String> log) throws IOException {
+            String workshopId, long timeUpdated, boolean writeSidecar,
+            Consumer<String> log) throws IOException {
         File src = new File(itemDir, "mods");
         if (!src.isDirectory()) {
             throw new IOException("no mods/ in downloaded item: " + itemDir);
@@ -72,7 +73,7 @@ public final class ModInstaller {
             log.accept("Installing " + modId + " -> " + dest.getAbsolutePath());
             try {
                 atomicReplace(modDir.toPath(), dest.toPath(), stageDir.toPath(),
-                        workshopId, modId, timeUpdated, log);
+                        workshopId, modId, timeUpdated, writeSidecar, log);
             } catch (IOException e) {
                 throw withLongPathHint(e, dest);
             }
@@ -108,14 +109,14 @@ public final class ModInstaller {
      * {@link #recoverInterruptedInstalls} on the next run.
      */
     private static void atomicReplace(Path src, Path dest, Path stageDir,
-            String workshopId, String modId, long timeUpdated,
+            String workshopId, String modId, long timeUpdated, boolean writeSidecar,
             Consumer<String> log) throws IOException {
         String tag = Long.toHexString(System.nanoTime());
         String base = dest.getFileName().toString();
         Path staging = stageDir.resolve(base + ".new-" + tag);
         Path backup = stageDir.resolve(base + ".old-" + tag);
         copyRecursive(src, staging);
-        if (workshopId != null && !workshopId.isBlank()) {
+        if (writeSidecar && workshopId != null && !workshopId.isBlank()) {
             try {
                 ModSidecar.write(staging.toFile(), workshopId, modId, timeUpdated);
             } catch (IOException e) {
