@@ -13,9 +13,9 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Keyless Steam Web API access: ISteamRemoteStorage/GetPublishedFileDetails.
- * Used for update checks (comparing remote time_updated against our map).
- * No API key required for this endpoint.
+ * Keyless Steam Web API access: ISteamRemoteStorage/GetPublishedFileDetails
+ * (update checks) and ISteamRemoteStorage/GetCollectionDetails (collection
+ * imports). No API key required for either endpoint.
  */
 public final class WorkshopApi {
     /**
@@ -29,6 +29,21 @@ public final class WorkshopApi {
     private static String detailsUrl() {
         return System.getProperty("workshopbridge.steamApiUrl",
                 "https://api.steampowered.com/ISteamRemoteStorage/GetPublishedFileDetails/v1/");
+    }
+
+    /**
+     * Steam Web API collection endpoint, overridable the same way as
+     * {@link #detailsUrl()}. This is a different endpoint from the file
+     * details one: GetPublishedFileDetails never returns a collection's
+     * children (verified against the live API), so collection imports must
+     * go here. Keyless, like the details endpoint.
+     */
+    private static String collectionUrl() {
+        String base = System.getProperty("workshopbridge.steamApiUrl", null);
+        if (base != null) {
+            return base;
+        }
+        return "https://api.steampowered.com/ISteamRemoteStorage/GetCollectionDetails/v1/";
     }
 
     private static final HttpClient CLIENT = HttpClient.newBuilder()
@@ -63,12 +78,14 @@ public final class WorkshopApi {
     /**
      * Returns the workshop ids contained in a collection item, in order.
      * A non-collection id (or a deleted/private one) yields an empty list.
+     * Uses GetCollectionDetails: GetPublishedFileDetails never returns a
+     * collection's children (verified against the live API).
      */
     public static List<String> getCollectionChildren(String collectionId) throws IOException {
         if (collectionId == null || !collectionId.matches("\\d+")) {
             throw new IllegalArgumentException("invalid workshop id: " + collectionId);
         }
-        String raw = postForm(detailsUrl(), "itemcount=1&publishedfileids%5B0%5D="
+        String raw = postForm(collectionUrl(), "collectioncount=1&publishedfileids%5B0%5D="
                 + URLEncoder.encode(collectionId, StandardCharsets.UTF_8));
         try {
             return parseChildren(raw);
@@ -159,9 +176,9 @@ public final class WorkshopApi {
         if (response == null) {
             throw new IllegalArgumentException("missing 'response' object");
         }
-        List<Object> details = Json.array(response.get("publishedfiledetails"));
+        List<Object> details = Json.array(response.get("collectiondetails"));
         if (details == null || details.isEmpty()) {
-            throw new IllegalArgumentException("missing 'publishedfiledetails' array");
+            throw new IllegalArgumentException("missing 'collectiondetails' array");
         }
         Map<String, Object> first = Json.object(details.get(0));
         if (first == null) {

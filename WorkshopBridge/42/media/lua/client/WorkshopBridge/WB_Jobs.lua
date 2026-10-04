@@ -12,11 +12,28 @@ require "WorkshopBridge/WB_Json"
 
 -- workshop id from OUR map via the Java API; nil = "Unknown workshop ID"
 -- (used by both the menu and the update-available state below)
+--
+-- Memoized per modId: the Java miss path scans every mod folder, and the
+-- row badge calls this per row per frame. The cache is cleared by
+-- WB_RefreshModList, which every install path (update, update-all,
+-- download, import, adopt) calls on completion - the map cannot change
+-- without it.
+local workshopIdCache = {}
+
 function WB_WorkshopIdFor(modId)
     if type(wbGetWorkshopId) ~= "function" or not modId then return nil end
+    local cached = workshopIdCache[modId]
+    if cached ~= nil then
+        return cached or nil
+    end
     local ok, wsid = pcall(wbGetWorkshopId, modId)
-    if ok and wsid and wsid ~= "" then return wsid end
-    return nil
+    local found = (ok and wsid and wsid ~= "") and wsid or nil
+    workshopIdCache[modId] = found or false
+    return found
+end
+
+function WB_ClearWorkshopIdCache()
+    for k in pairs(workshopIdCache) do workshopIdCache[k] = nil end
 end
 
 -- the game's own workshop id signal (non-empty only for Steam-managed mods)

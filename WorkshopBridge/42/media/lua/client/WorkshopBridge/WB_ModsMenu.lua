@@ -1,15 +1,19 @@
 -- WorkshopBridge Mods-menu UI.
 --
--- B42 hook points (verified against PZ-Umbrella type stubs + Javadocs):
+-- B42 hook points (verified against PZ-Umbrella type stubs + Javadocs,
+-- placement verified in-game Oct 2026):
 --   * Screen: ModSelector (ISPanelJoypad), singleton ModSelector.instance,
 --     opened from the main menu via MainScreen:onClickModList().
---   * "Check for updates" + "Update all": wrapped ModSelector:create, buttons
---     anchored to self.backButton (provisional placement - verify in-game).
+--   * Menu buttons ("Check for updates", "Update all", "Download",
+--     "More tools"): wrapped ModSelector:create, joining vanilla's
+--     bottom-right cluster (anchored to mapOrderbtn/modOrderbtn/acceptButton).
 --   * Row status text: rows are drawn (not widget-composed) by
 --     ModListBox:doDrawItem(y, item, alt); item.modId is the mod.info id=.
---     Wrapped per-instance inside create().
+--     Wrapped at class level (not per-instance) so later patches by other
+--     mods chain instead of being shadowed. MUST propagate the return value
+--     (vanilla prerender does arithmetic on it).
 --   * Per-mod Update button / status label: ModInfoPanel (createChildren once,
---     updateView(modInfo) per selection). Provisional placement - verify in-game.
+--     updateView(modInfo) per selection).
 -- There is no dedicated event for the Mods screen; method-wrapping is the
 -- standard approach. All hooks are idempotent (wb*Added flags).
 require "WorkshopBridge/WB_Config"
@@ -100,6 +104,8 @@ end
 -- would not show up. Must run on the game thread; job onDone handlers
 -- qualify (they run from the tick pump).
 function WB_RefreshModList(ms)
+    -- the workshop-id memo is keyed by modId; the map just changed, so drop it
+    WB_ClearWorkshopIdCache()
     if type(wbInvalidateModCaches) == "function" then
         pcall(wbInvalidateModCaches)
     end
@@ -123,9 +129,17 @@ local function WB_OnCheckAll(ms)
         end,
         onDone = function(st)
             WB_HideProgress()
+            if st and st.state == "failed" then
+                -- a failed check produced no new information: keep the last
+                -- successful results (badges + count) instead of wiping them
+                print("[WorkshopBridge] check for updates failed: "
+                    .. tostring(st.error or "?"))
+                WB_ShowError(ms, WB_Text.CheckFailed .. ": " .. WB_ShortError(st.error, 64))
+                return
+            end
             WB_ClearUpdateAvailable()
             local n = 0
-            if st and st.state ~= "failed" and st.updates then
+            if st and st.updates then
                 -- st.updates lists workshop ids (one entry per outdated
                 -- item, however many mods the item holds)
                 for _, wsid in ipairs(st.updates) do
@@ -139,18 +153,12 @@ local function WB_OnCheckAll(ms)
             if wbLastModPanel then
                 WB_RefreshModPanel(wbLastModPanel.panel, wbLastModPanel.modInfo)
             end
-            if st and st.state == "failed" then
-                print("[WorkshopBridge] check for updates failed: "
-                    .. tostring(st.error or "?"))
-                WB_ShowError(ms, WB_Text.CheckFailed .. ": " .. WB_ShortError(st.error, 64))
-            else
-                print("[WorkshopBridge] check for updates complete: "
-                    .. n .. " update(s) available")
-                -- the job's final message is the summary ("Everything is up
-                -- to date" / "N mod(s) have updates"); flash it briefly so
-                -- a clean check isn't just silence
-                WB_FlashMessage(ms, (st and st.message) or WB_Text.Checking)
-            end
+            print("[WorkshopBridge] check for updates complete: "
+                .. n .. " update(s) available")
+            -- the job's final message is the summary ("Everything is up
+            -- to date" / "N mod(s) have updates"); flash it briefly so
+            -- a clean check isn't just silence
+            WB_FlashMessage(ms, (st and st.message) or WB_Text.Checking)
         end,
     })
 end
@@ -169,23 +177,30 @@ local function WB_OnUpdateAll(ms)
         end,
         onDone = function(st)
             WB_HideProgress()
-            WB_ClearUpdateAvailable()
-            WB_RefreshUpdateAllButton(ms, 0)
             if st and st.state == "failed" then
                 print("[WorkshopBridge] update-all failed: " .. tostring(st.error or "?"))
                 WB_ShowError(ms, WB_Text.UpdateFailed .. ": " .. WB_ShortError(st.error, 64))
-            else
-                print("[WorkshopBridge] update-all complete")
-                -- update-all handled everything: persisted per-mod failure
-                -- notes are stale now (in-flight entries, if any, are left
-                -- alone - their own onDone will settle them)
-                for k, j in pairs(wbModJobs) do
-                    if j.failed then wbModJobs[k] = nil end
+                -- a failure after partial progress still installed mods:
+                -- they need to reach the list even though the job failed.
+                -- The prior update marks are kept (this run produced no
+                -- complete new result); the next check corrects them.
+                if st and (st.done or 0) > 0 then
+                    WB_RefreshModList(ms)
                 end
-                WB_FlashMessage(ms, (st and st.message) or WB_Text.Updating)
-                -- rescan so newly downloaded/changed mods appear in the list
-                WB_RefreshModList(ms)
+                return
             end
+            WB_ClearUpdateAvailable()
+            WB_RefreshUpdateAllButton(ms, 0)
+            print("[WorkshopBridge] update-all complete")
+            -- update-all handled everything: persisted per-mod failure
+            -- notes are stale now (in-flight entries, if any, are left
+            -- alone - their own onDone will settle them)
+            for k, j in pairs(wbModJobs) do
+                if j.failed then wbModJobs[k] = nil end
+            end
+            WB_FlashMessage(ms, (st and st.message) or WB_Text.Updating)
+            -- rescan so newly downloaded/changed mods appear in the list
+            WB_RefreshModList(ms)
         end,
     })
 end
@@ -286,7 +301,6 @@ end
 
 local function WB_AddMenuButtons(ms)
     if ms.wbButtonsAdded then return end
-    ms.wbButtonsAdded = true
     -- build the progress panel up-front, in normal UI-construction context
     -- (lazy tick-time construction hid failures and poisoned the panel)
     WB_EnsureProgressPanel(ms)
@@ -320,6 +334,9 @@ local function WB_AddMenuButtons(ms)
         b:ignoreHeightChange()
         ms:addChild(b)
     end
+    -- mark installed only after success: an early hook (no anchor yet)
+    -- must be able to retry once the anchor exists
+    ms.wbButtonsAdded = true
 end
 
 -- The ModListBox class our row wrapper chains. Global so tests can stub it.

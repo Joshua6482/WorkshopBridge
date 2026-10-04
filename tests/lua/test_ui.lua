@@ -168,9 +168,11 @@ panel:updateView(fakeModInfo("NoMapMod", ""))
 -- so instead verify the unknown branch via a temporary override)
 local realWsid = wbGetWorkshopId
 wbGetWorkshopId = function() return nil end
+WB_ClearWorkshopIdCache() -- test swaps the stub mid-run; the game never does
 panel:updateView(fakeModInfo("NoMapMod", ""))
 check(panel.wbStatusLabel.name == WB_Text.UnknownWorkshopId, "Unknown workshop ID label")
 wbGetWorkshopId = realWsid
+WB_ClearWorkshopIdCache()
 
 -- ---------- open-in-workshop button ----------
 panel:updateView(fakeModInfo("SomeMod", ""))
@@ -185,9 +187,11 @@ check(panel.wbWorkshopId == "999", "game workshop id used when not tracked",
     panel.wbWorkshopId)
 
 wbGetWorkshopId = function() return nil end
+WB_ClearWorkshopIdCache() -- test swaps the stub mid-run; the game never does
 panel:updateView(fakeModInfo("NoMapMod", ""))
 check(not panel.wbWorkshopBtn.visible, "workshop button hidden when id unknown")
 wbGetWorkshopId = realWsid
+WB_ClearWorkshopIdCache()
 
 -- clicking opens the stored workshop id in the browser
 local openedId = nil
@@ -398,6 +402,60 @@ check(panel.wbUpdateBtn.title == WB_Text.Update,
     "button title refreshed by check", panel.wbUpdateBtn.title)
 for _ = 1, 200 do ms:update() end -- fallback pump advances the flash timer
 check(not sumPanel:isVisible(), "result flash auto-hides")
+
+-- ---------- failed check keeps the last successful results ----------
+check(WB_IsUpdateAvailable("SomeMod"), "precondition: update marked")
+local realStatus = wbGetJobStatus
+wbGetJobStatus = function(jobId)
+    return '{"state":"failed","done":0,"total":6,"message":"nope","error":"no network"}'
+end
+ms.wbCheckBtn.onclick()
+tick(10) -- the stubbed failure is visible immediately
+wbGetJobStatus = realStatus
+check(WB_IsUpdateAvailable("SomeMod"), "failed check keeps prior update marks")
+check(ms.wbUpdateAllBtn.title == "Update all (1)", "failed check keeps button count",
+    ms.wbUpdateAllBtn.title)
+
+-- ---------- failed update-all keeps marks, refreshes partial progress ----------
+local reloadedBefore = ms.reloaded or 0
+wbGetJobStatus = function(jobId)
+    return '{"state":"failed","done":2,"total":5,"message":"nope","error":"disk full"}'
+end
+ms.wbUpdateAllBtn.onclick()
+tick(10)
+wbGetJobStatus = realStatus
+check(WB_IsUpdateAvailable("SomeMod"), "failed update-all keeps prior update marks")
+check((ms.reloaded or 0) > reloadedBefore,
+    "partial update-all (done>0) still refreshes the list")
+
+-- ---------- hook before the anchor exists retries later ----------
+local bare = setmetatable({ x = 0, y = 0, width = 1024, height = 768, children = {} },
+    { __index = UIElement })
+WB_HookInstance(bare) -- no mapOrderbtn/modOrderbtn/acceptButton yet
+check(bare.wbCheckBtn == nil, "no buttons installed without an anchor")
+bare.mapOrderbtn = {
+    getHeight = function() return 30 end,
+    getX = function() return 900 end,
+    getY = function() return 700 end,
+}
+WB_HookInstance(bare) -- anchor appeared: retry must install
+check(bare.wbCheckBtn ~= nil and bare.wbUpdateAllBtn ~= nil,
+    "buttons install on retry after anchor appears")
+local kidsAfterRetry = #bare.children
+WB_HookInstance(bare)
+check(#bare.children == kidsAfterRetry, "successful install stays idempotent")
+
+-- ---------- workshop-id memo: one Java call per modId ----------
+WB_ClearWorkshopIdCache()
+local wsidCalls = 0
+local realWsid = wbGetWorkshopId
+wbGetWorkshopId = function(modId) wsidCalls = wsidCalls + 1 return realWsid(modId) end
+fakeList:doDrawItem(100, { item = fakeModInfo("SomeMod", "") }, false)
+fakeList:doDrawItem(100, { item = fakeModInfo("SomeMod", "") }, false)
+fakeList:doDrawItem(100, { item = fakeModInfo("OtherMod", "") }, false)
+check(wsidCalls == 2, "one Java lookup per modId across draws", wsidCalls)
+wbGetWorkshopId = realWsid
+WB_ClearWorkshopIdCache()
 
 -- ---------- unknown job is dropped gracefully ----------
 local doneState = nil

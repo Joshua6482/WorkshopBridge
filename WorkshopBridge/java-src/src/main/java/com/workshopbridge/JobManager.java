@@ -3,6 +3,7 @@ package com.workshopbridge;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -12,6 +13,7 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.function.Consumer;
 
 /**
  * Runs downloads/checks on background threads and exposes pollable status.
@@ -161,6 +163,7 @@ public final class JobManager {
         }
         List<String> withUpdates = new ArrayList<>();
         List<String> missing = new ArrayList<>();
+        List<String> skipped = new ArrayList<>();
         // Re-read the map AFTER the network round trip: an update job may
         // have installed items while we were waiting, and comparing against
         // the pre-request snapshot would resurrect stale "update available"
@@ -179,7 +182,14 @@ public final class JobManager {
                 // the API had no entry: item deleted or made private
                 missing.add(wsid);
                 job.message = "Checked " + i + "/" + ids.size();
-            } else if (!inFlight.contains(wsid) && tu > e.timeUpdated) {
+            } else if (inFlight.contains(wsid)) {
+                // a download is updating this item right now, so its map
+                // timestamp is about to change and any comparison would be
+                // stale. Don't report it as up to date - mark the check
+                // incomplete instead (see the summary suffix below).
+                skipped.add(wsid);
+                job.message = "Checked " + i + "/" + ids.size();
+            } else if (tu > e.timeUpdated) {
                 // one entry per workshop item: an item holding five mods is
                 // one update, not five
                 withUpdates.add(wsid);
@@ -190,7 +200,7 @@ public final class JobManager {
         }
         job.updates = withUpdates;
         job.done = ids.size();
-        job.message = checkSummary(withUpdates.size(), missing);
+        job.message = checkSummary(withUpdates.size(), missing) + skippedSuffix(skipped);
         job.state = State.DONE;
     }
 
@@ -420,11 +430,52 @@ public final class JobManager {
     private void installDownloaded(File itemDir, String workshopId, long timeUpdated) throws Exception {
         // staging lives under the workshop cache and outside mods/ itself,
         // where the game's file watcher would trip over the transient backup dirs
+        WorkshopMap.Entry prev = backend.workshopMap().snapshot().get(workshopId);
         List<String> modIds = ModInstaller.install(
                 itemDir, backend.modsDir(),
                 new File(backend.cacheDir(), ".install-staging"),
                 line -> System.out.println("[WorkshopBridge] " + line));
+        removeStaleSubMods(workshopId, prev == null ? List.of() : prev.modIds, modIds);
         backend.workshopMap().record(workshopId, modIds, timeUpdated);
+    }
+
+    /**
+     * An updated workshop item may no longer contain every mod it used to
+     * (the author removed one). A folder left behind would keep loading in
+     * the game while no longer being tracked or updatable, so remove it -
+     * but only when we are sure it belongs to this item: the folder's
+     * mod.info id must match the stale id, and no other workshop item may
+     * still claim that id.
+     */
+    private void removeStaleSubMods(String workshopId, List<String> oldIds, List<String> newIds) {
+        Set<String> stale = new HashSet<>(oldIds);
+        stale.removeAll(new HashSet<>(newIds));
+        if (stale.isEmpty()) {
+            return;
+        }
+        Map<String, WorkshopMap.Entry> items = backend.workshopMap().snapshot();
+        File[] dirs = backend.modsDir().listFiles(File::isDirectory);
+        if (dirs == null) {
+            return;
+        }
+        Consumer<String> log = line -> System.out.println("[WorkshopBridge] " + line);
+        for (String modId : stale) {
+            boolean claimedElsewhere = items.entrySet().stream()
+                    .anyMatch(e -> !e.getKey().equals(workshopId)
+                            && e.getValue().modIds.contains(modId));
+            if (claimedElsewhere) {
+                log.accept("Keeping " + modId + ": still claimed by another workshop item");
+                continue;
+            }
+            for (File dir : dirs) {
+                if (!modId.equals(ModInstaller.readModId(dir))) {
+                    continue;
+                }
+                log.accept("Removing " + dir.getName()
+                        + " (no longer in workshop item " + workshopId + ")");
+                ModInstaller.deleteRecursiveQuiet(dir.toPath(), log);
+            }
+        }
     }
 
     private void fail(Job job, Throwable t) {
@@ -451,6 +502,15 @@ public final class JobManager {
         return "; " + missing.size()
                 + " workshop item(s) no longer listed (deleted or private?): "
                 + String.join(", ", missing);
+    }
+
+    // package-private for tests
+    static String skippedSuffix(List<String> skipped) {
+        if (skipped.isEmpty()) {
+            return "";
+        }
+        return "; " + skipped.size()
+                + " workshop item(s) skipped (update in flight - re-run the check to confirm)";
     }
 
     private void prune() {

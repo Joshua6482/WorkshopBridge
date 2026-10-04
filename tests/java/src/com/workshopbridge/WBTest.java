@@ -347,6 +347,9 @@ public class WBTest {
             List<Object> flightUpdates = Json.array(flightSt.get("updates"));
             check(flightUpdates != null && flightUpdates.isEmpty(),
                     "check excludes in-flight download", flightUpdates);
+            check(String.valueOf(flightSt.get("message")).contains("skipped (update in flight"),
+                    "check reports the skipped item instead of a clean bill",
+                    flightSt.get("message"));
             awaitDone(jobs, slowUpId);
             apiJson.set("{\"response\":{\"publishedfiledetails\":["
                     + "{\"publishedfileid\":\"111\",\"time_updated\":2000,"
@@ -385,9 +388,10 @@ public class WBTest {
                 "both queued downloads complete");
 
         // ---- 4e. a failed steamcmd must not install stale cached content ----
-        // 99996 downloads fine once; then the fake is told to fail (exit 1)
-        // while the previous files are still cached. The job must fail with
-        // the exit code named, not reinstall the stale tree as if fresh.
+        // 99996 downloads fine once; then the fake is told to fail (exit 1).
+        // The item dir is wiped before every download, so there is no stale
+        // tree to fall back on: the job must fail with the exit code named,
+        // not reinstall anything as if fresh.
         String staleId1 = jobs.submitUpdate("99996");
         Map<String, Object> stale1 = awaitDone(jobs, staleId1);
         check("done".equals(stale1.get("state")), "stale-test setup download completes",
@@ -412,6 +416,12 @@ public class WBTest {
                 JobManager.checkSummary(1, List.of()));
         check(JobManager.checkSummary(0, List.of()).equals("Everything is up to date"),
                 "summary clean");
+        check(JobManager.skippedSuffix(List.of("1", "2")).equals(
+                        "; 2 workshop item(s) skipped (update in flight - re-run the check to confirm)"),
+                "skipped suffix names the count",
+                JobManager.skippedSuffix(List.of("1", "2")));
+        check(JobManager.skippedSuffix(List.of()).isEmpty(),
+                "skipped suffix empty when nothing skipped");
         String s2 = JobManager.checkSummary(0, List.of("222", "333"));
         check(s2.contains("Everything is up to date") && s2.contains("222, 333"),
                 "summary clean + missing lists ids", s2);
@@ -455,6 +465,15 @@ public class WBTest {
                         && exportText.contains(
                         "https://steamcommunity.com/sharedfiles/filedetails/?id=12345\n"),
                 "export writes one URL per line", exportText);
+        // two exports in the same second must not overwrite each other
+        String exp1 = backend.exportModList(List.of("111"));
+        String exp2 = backend.exportModList(List.of("222"));
+        check(!exp1.equals(exp2), "back-to-back exports get distinct paths",
+                exp1 + " vs " + exp2);
+        check(Files.readString(new File(exp1).toPath()).contains("?id=111"),
+                "first export keeps its content");
+        check(Files.readString(new File(exp2).toPath()).contains("?id=222"),
+                "second export keeps its content");
 
         // ---- 5d. more tools: import job (fake steamcmd does the work) ----
         String impId = jobs.submitImport(List.of("99994", "99995"));
@@ -510,16 +529,63 @@ public class WBTest {
         check("failed".equals(abst.get("state")), "adopt with bad id fails",
                 abst.get("state"));
 
-        // ---- 5e. collection children parsing (offline, inline JSON) ----
-        String collJson = "{\"response\":{\"result\":1,\"publishedfiledetails\":[{"
+        // ---- 5d3. stale sub-mods: an update drops what the item no longer holds ----
+        // 99987 is a two-mod item in the fake steamcmd; the .single-99987
+        // marker makes it serve only the first (author removed the second).
+        String twoId = jobs.submitUpdate("99987");
+        Map<String, Object> twoSt = awaitDone(jobs, twoId);
+        check("done".equals(twoSt.get("state")), "two-mod item installs", twoSt.get("error"));
+        File modA = new File(backend.modsDir(), "FakeMod-99987-A");
+        File modB = new File(backend.modsDir(), "FakeMod-99987-B");
+        check(modA.isDirectory() && modB.isDirectory(), "both sub-mods installed");
+        check(backend.workshopMap().snapshot().get("99987").modIds
+                        .containsAll(List.of("FakeMod-99987-A", "FakeMod-99987-B")),
+                "map records both sub-mods");
+        // protection: another item claims B, so the update must keep its folder
+        backend.workshopMap().record("99986", List.of("FakeMod-99987-B"), 123L);
+        File singleMarker = new File(backend.cacheDir(), ".single-99987");
+        check(singleMarker.createNewFile(), "single-mod marker created");
+        String twoId2 = jobs.submitUpdate("99987");
+        Map<String, Object> twoSt2 = awaitDone(jobs, twoId2);
+        check("done".equals(twoSt2.get("state")), "update with removed sub-mod completes",
+                twoSt2.get("error"));
+        check(modB.isDirectory(), "claimed-elsewhere folder is kept");
+        check(backend.workshopMap().snapshot().get("99987").modIds
+                        .equals(List.of("FakeMod-99987-A")),
+                "map drops the removed sub-mod");
+        // no other claim: the stale folder is removed
+        backend.workshopMap().record("99986", List.of(), 123L);
+        backend.workshopMap().record("99987",
+                List.of("FakeMod-99987-A", "FakeMod-99987-B"), 123L);
+        String twoId3 = jobs.submitUpdate("99987");
+        Map<String, Object> twoSt3 = awaitDone(jobs, twoId3);
+        check("done".equals(twoSt3.get("state")), "stale-cleanup update completes",
+                twoSt3.get("error"));
+        check(!modB.exists(), "unclaimed stale folder is removed");
+        check(modA.isDirectory(), "surviving sub-mod untouched");
+        check(backend.workshopMap().snapshot().get("99987").modIds
+                        .equals(List.of("FakeMod-99987-A")),
+                "map records only the surviving sub-mod");
+        check(singleMarker.delete(), "single-mod marker cleaned up");
+
+        // ---- 5e. collection children parsing (offline, real captured fixture) ----
+        // fixture: live GetCollectionDetails response for collection 3624667829
+        String collJson = Files.readString(
+                new File(System.getProperty("wb.test.fixtures"), "collectiondetails.json").toPath(),
+                StandardCharsets.UTF_8);
+        check(WorkshopApi.parseChildren(collJson).equals(
+                        List.of("3579640010", "3624669324", "3628452306", "3721829036")),
+                "parseChildren reads the real collectiondetails shape",
+                WorkshopApi.parseChildren(collJson));
+        String collInline = "{\"response\":{\"result\":1,\"collectiondetails\":[{"
                 + "\"publishedfileid\":\"555\",\"result\":1,"
                 + "\"children\":[{\"publishedfileid\":\"111\",\"sortorder\":1},"
                 + "{\"publishedfileid\":222,\"sortorder\":2},"
                 + "{\"kind\":\"collection\"}]}]}}";
-        check(WorkshopApi.parseChildren(collJson).equals(List.of("111", "222")),
+        check(WorkshopApi.parseChildren(collInline).equals(List.of("111", "222")),
                 "parseChildren reads string+numeric child ids",
-                WorkshopApi.parseChildren(collJson));
-        String fileJson = "{\"response\":{\"publishedfiledetails\":[{\"publishedfileid\":\"666\"}]}}";
+                WorkshopApi.parseChildren(collInline));
+        String fileJson = "{\"response\":{\"collectiondetails\":[{\"publishedfileid\":\"666\"}]}}";
         check(WorkshopApi.parseChildren(fileJson).isEmpty(),
                 "parseChildren empty for non-collection (not an error)");
         check(throwsIAE(() -> WorkshopApi.parseChildren("nope")),
