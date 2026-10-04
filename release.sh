@@ -240,6 +240,8 @@ if [ "$TAG_TARGET" != "$(git rev-parse HEAD)" ]; then
     echo "release.sh: note: local tag $TAG points at ${TAG_TARGET:0:12}, not at"
     echo "  HEAD ($(git rev-parse --short HEAD)) — the release will be tagged"
     echo "  there, while the zip was built from the working tree."
+    echo "  To move the tag onto HEAD instead (only safe if it was never"
+    echo "  pushed): git tag -f $TAG"
 fi
 if [ -z "$ASSUME_YES" ] && command -v gh >/dev/null 2>&1; then
     if confirm "Create DRAFT GitHub release $TAG (tag -> ${TAG_TARGET:0:12}) and upload the zip?"; then
