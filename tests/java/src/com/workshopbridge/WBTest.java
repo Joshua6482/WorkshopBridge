@@ -203,6 +203,26 @@ public class WBTest {
         System.arraycopy(bom, 0, withBom, 0, bom.length);
         System.arraycopy(plain, 0, withBom, bom.length, plain.length);
         Files.write(props.toPath(), withBom);
+
+        // ---- 3c2. workshopbridge.properties auto-created with docs ----
+        File propsDir = scratchDir(zomboidDir, "wb-props");
+        File autoProps = new File(propsDir, "workshopbridge.properties");
+        check(!autoProps.isFile(), "no properties file before SteamCmd init");
+        new SteamCmd(propsDir);
+        check(autoProps.isFile(), "properties file auto-created");
+        String template = Files.readString(autoProps.toPath());
+        check(template.contains("#") && template.contains("steamcmd.path"),
+                "template carries commented docs");
+        // an existing file is never overwritten...
+        Files.writeString(autoProps.toPath(), "steamcmd.path=/custom/steamcmd\n");
+        new SteamCmd(propsDir);
+        check(Files.readString(autoProps.toPath()).contains("/custom/steamcmd"),
+                "existing properties file preserved");
+        // ...and the commented template parses to "no override"
+        File bareDir = scratchDir(zomboidDir, "wb-props-bare");
+        new SteamCmd(bareDir); // creates the template
+        check(new SteamCmd(bareDir).findExecutable() == null,
+                "template with empty steamcmd.path -> no override");
         check(fakeExe.equals(backend.steamCmd().findExecutable()),
                 "BOM in properties file does not drop steamcmd.path",
                 backend.steamCmd().findExecutable());
