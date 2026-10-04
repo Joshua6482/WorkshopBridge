@@ -215,13 +215,12 @@ planned properly.
   not reused - find the right seam (likely the workshop-download dialog or
   state in the join flow).
 
-- [ ] **"Open in Workshop" button (next up).** Per-mod button opening the item's
-  workshop page in the system browser. Lua can't launch browsers (Kahlua has
-  no `os.execute`), so this is a Java-side `ProcessBuilder`
-  (`xdg-open` / `cmd /c start` / `open`) behind a new Lua global, e.g.
-  `wbOpenWorkshopPage(workshopId)`. Show only when a workshop id is known
-  (tracked by us or Steam-managed). Mind the posix_spawn/FORK situation on
-  the spawn path.
+- [x] **"Open in Workshop" button (done Oct 2026).** Per-mod button in the
+  info panel opening the item's workshop page in the system browser. Java
+  `wbOpenWorkshopPage(workshopId)` via `ProcessBuilder` (`xdg-open` /
+  `gio open` / `open` / `cmd /c start`), id digits-validated before it
+  touches a command line. Shown whenever a workshop id is known (tracked
+  by us or Steam-managed).
 
 - [ ] **Release checklist (before any public build).**
   - ~~`WB_Config.DEBUG_STUB` must be off for release~~ done Oct 2026:

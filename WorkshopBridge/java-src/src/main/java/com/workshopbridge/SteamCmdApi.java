@@ -115,4 +115,47 @@ public final class SteamCmdApi {
             return null;
         }
     }
+
+    /**
+     * Opens the workshop page for an item in the system browser.
+     * Returns true if a browser process was launched. The id is validated
+     * as digits only before it goes anywhere near a command line, so the
+     * {@code cmd /c start} path on Windows can't be injected into.
+     * Process launching inherits the JVM-wide process launch mechanism
+     * (see Main.main's FORK handling for the steam-run/posix_spawn issue).
+     */
+    @LuaMethod(name = "wbOpenWorkshopPage", global = true)
+    public static boolean wbOpenWorkshopPage(String workshopId) {
+        try {
+            if (workshopId == null || !workshopId.matches("[0-9]+")) return false;
+            String url = "https://steamcommunity.com/sharedfiles/filedetails/?id=" + workshopId;
+            for (String[] cmd : browserCommands(url)) {
+                try {
+                    new ProcessBuilder(cmd).start();
+                    return true;
+                } catch (Exception ignored) {
+                }
+            }
+            System.out.println("[WorkshopBridge] could not open a browser for " + url);
+            return false;
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
+    /**
+     * OS-specific commands that open a URL in the default browser, in
+     * preference order. Package-visible for tests.
+     */
+    static String[][] browserCommands(String url) {
+        String os = System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT);
+        if (os.contains("win")) {
+            // the empty title keeps start from eating the URL as the title
+            return new String[][] { { "cmd", "/c", "start", "\"\"", url } };
+        }
+        if (os.contains("mac")) {
+            return new String[][] { { "open", url } };
+        }
+        return new String[][] { { "xdg-open", url }, { "gio", "open", url } };
+    }
 }

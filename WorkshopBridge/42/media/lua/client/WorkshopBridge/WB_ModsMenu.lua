@@ -67,12 +67,19 @@ local function WB_RefreshModPanel(panel, modInfo)
     panel.wbModId = modId
     if not panel.wbUpdateBtn then return end
     local wsid = WB_WorkshopIdFor(modId)
+    local gameWsid = WB_GameWorkshopId(modInfo)
+    -- the workshop page button shows whenever an id is known: tracked by
+    -- us or Steam-managed alike
+    panel.wbWorkshopId = wsid or gameWsid
+    if panel.wbWorkshopBtn then
+        panel.wbWorkshopBtn:setVisible(panel.wbWorkshopId ~= nil)
+    end
     if wsid then
         panel.wbUpdateBtn:setVisible(true)
         WB_SetLabel(panel.wbStatusLabel,
             WB_IsUpdateAvailable(modId) and WB_Text.UpdateAvailableBadge or "")
         WB_RefreshModButtonTitle(panel, modId)
-    elseif WB_GameWorkshopId(modInfo) then
+    elseif gameWsid then
         panel.wbUpdateBtn:setVisible(false)
         WB_SetLabel(panel.wbStatusLabel, WB_Text.ManagedBySteam)
     else
@@ -185,6 +192,15 @@ local function WB_OnUpdateAll(ms)
             end
         end,
     })
+end
+
+local function WB_OnOpenWorkshop(panel)
+    local wsid = panel.wbWorkshopId
+    if not wsid or type(wbOpenWorkshopPage) ~= "function" then return end
+    local ok = wbOpenWorkshopPage(wsid)
+    if not ok then
+        print("[WorkshopBridge] couldn't open the workshop page for " .. tostring(wsid))
+    end
 end
 
 local function WB_OnModUpdate(panel)
@@ -398,6 +414,11 @@ local function WB_AddModPanelControls(panel)
     panel.wbUpdateBtn:initialise()
     panel.wbUpdateBtn:instantiate()
     panel:addChild(panel.wbUpdateBtn)
+    panel.wbWorkshopBtn = ISButton:new(x + w + 8, y, w, h, WB_Text.OpenInWorkshop, panel,
+        function() WB_OnOpenWorkshop(panel) end)
+    panel.wbWorkshopBtn:initialise()
+    panel.wbWorkshopBtn:instantiate()
+    panel:addChild(panel.wbWorkshopBtn)
     panel.wbStatusLabel = ISLabel:new(x, y - 22, 20, "", 0.8, 0.8, 0.8, 1, UIFont.Small, true)
     panel.wbStatusLabel:initialise()
     panel.wbStatusLabel:instantiate()

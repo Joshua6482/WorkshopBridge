@@ -623,6 +623,33 @@ public class WBTest {
         check(FakeLuaExposer.exposedCount == 0,
                 "nothing exposed immediately without a Lua engine");
 
+        // ---- 18. wbOpenWorkshopPage builds OS-appropriate browser commands ----
+        String realOs = System.getProperty("os.name");
+        try {
+            System.setProperty("os.name", "Windows 11");
+            String[][] win = SteamCmdApi.browserCommands("https://steamcommunity.com/sharedfiles/filedetails/?id=1");
+            check(win.length == 1 && win[0][0].equals("cmd") && win[0][3].equals("\"\"")
+                            && win[0][4].endsWith("?id=1"),
+                    "windows uses cmd /c start with an empty title",
+                    java.util.Arrays.deepToString(win));
+            System.setProperty("os.name", "Mac OS X");
+            String[][] mac = SteamCmdApi.browserCommands("https://example.com/x");
+            check(mac.length == 1 && mac[0][0].equals("open")
+                            && mac[0][1].equals("https://example.com/x"),
+                    "macos uses open", java.util.Arrays.deepToString(mac));
+            System.setProperty("os.name", "Linux");
+            String[][] lin = SteamCmdApi.browserCommands("https://example.com/x");
+            check(lin.length >= 1 && lin[0][0].equals("xdg-open")
+                            && lin[0][1].equals("https://example.com/x"),
+                    "linux tries xdg-open first", java.util.Arrays.deepToString(lin));
+        } finally {
+            if (realOs != null) System.setProperty("os.name", realOs);
+        }
+        // invalid ids never reach a command line (valid ids would launch a
+        // real browser, so they are not exercised here)
+        check(!SteamCmdApi.wbOpenWorkshopPage("1 & evil"), "non-numeric id rejected");
+        check(!SteamCmdApi.wbOpenWorkshopPage(null), "null id rejected");
+
         System.out.println(failures == 0 ? "ALL TESTS PASSED" : failures + " FAILURES");
         System.exit(failures == 0 ? 0 : 1);
     }

@@ -172,6 +172,32 @@ panel:updateView(fakeModInfo("NoMapMod", ""))
 check(panel.wbStatusLabel.name == WB_Text.UnknownWorkshopId, "Unknown workshop ID label")
 wbGetWorkshopId = realWsid
 
+-- ---------- open-in-workshop button ----------
+panel:updateView(fakeModInfo("SomeMod", ""))
+check(panel.wbWorkshopBtn ~= nil, "workshop button exists")
+check(panel.wbWorkshopBtn.visible, "workshop button visible for WB-tracked mod")
+check(panel.wbWorkshopId == "1111111111", "workshop id stored for tracked mod",
+    panel.wbWorkshopId)
+
+panel:updateView(fakeModInfo("WorkshopBridge", "999"))
+check(panel.wbWorkshopBtn.visible, "workshop button visible for Steam-managed mod")
+check(panel.wbWorkshopId == "999", "game workshop id used when not tracked",
+    panel.wbWorkshopId)
+
+wbGetWorkshopId = function() return nil end
+panel:updateView(fakeModInfo("NoMapMod", ""))
+check(not panel.wbWorkshopBtn.visible, "workshop button hidden when id unknown")
+wbGetWorkshopId = realWsid
+
+-- clicking opens the stored workshop id in the browser
+local openedId = nil
+local realOpen = wbOpenWorkshopPage
+wbOpenWorkshopPage = function(wsid) openedId = wsid return true end
+panel:updateView(fakeModInfo("SomeMod", ""))
+panel.wbWorkshopBtn.onclick()
+check(openedId == "1111111111", "click opens the mod's workshop page", openedId)
+wbOpenWorkshopPage = realOpen
+
 -- ---------- check-for-updates flow ----------
 panel:updateView(fakeModInfo("SomeMod", "")) -- re-select; marks seenModIds
 ms.wbCheckBtn.onclick() -- click "Check for updates"
