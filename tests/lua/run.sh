@@ -26,6 +26,9 @@ if [ -z "$LUA" ]; then
     echo "Install one, e.g.: apt install lua5.4  |  brew install lua  |  https://www.lua.org/download.html" >&2
     exit 1
 fi
+# Say which interpreter (and version) runs the suite: 5.2 vs 5.3/5.4
+# differences are silent otherwise.
+echo "Using Lua: $LUA ($("$LUA" -v 2>&1))"
 
 fail=0
 run() { # name, script

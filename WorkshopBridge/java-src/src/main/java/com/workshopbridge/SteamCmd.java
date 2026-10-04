@@ -279,6 +279,14 @@ public final class SteamCmd {
         if (!cacheDir.isDirectory() && !cacheDir.mkdirs()) {
             throw new IOException("cannot create cache dir: " + cacheDir);
         }
+        File itemDir = new File(cacheDir,
+                "steamapps/workshop/content/" + APP_ID + "/" + workshopId);
+        // Start from a clean item dir: steamcmd does not reliably remove
+        // files the author deleted from the item, and a stale cache would
+        // otherwise be installed (and recorded) as if it were current.
+        // A failed download still fails loudly on its exit code below, so
+        // wiping first can never install old content as fresh.
+        ModInstaller.deleteRecursiveQuiet(itemDir.toPath(), log);
         List<String> cmd = new ArrayList<>(LAUNCH_PREFIX);
         cmd.add(exe);
         // NB: +force_install_dir must come before +login, or steamcmd errors out.
@@ -348,8 +356,6 @@ public final class SteamCmd {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
-        File itemDir = new File(cacheDir,
-                "steamapps/workshop/content/" + APP_ID + "/" + workshopId);
         File modsDir = new File(itemDir, "mods");
         String tail;
         synchronized (output) {

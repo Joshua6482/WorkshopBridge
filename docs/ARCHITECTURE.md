@@ -50,7 +50,7 @@ gracefully on other ZombieBuddy versions.
 | `wbUpdateAll()` | - | jobId; checks for and downloads outdated items |
 | `wbExportModList(idsCsv)` | comma-separated workshop IDs | synchronously writes `workshopbridge-exports/modlist-<timestamp>.txt`; returns its absolute path or null on failure |
 | `wbImportMods(idsCsv)` | comma-separated workshop IDs | jobId; downloads and installs IDs in order (`Importing i/N`) |
-| `wbImportCollection(collectionId)` | workshop collection ID | jobId; resolves `children` via `GetPublishedFileDetails`, then imports them as `wbImportMods` does |
+| `wbImportCollection(collectionId)` | workshop collection ID | jobId; resolves `children` via `GetCollectionDetails`, then imports them as `wbImportMods` does |
 | `wbAdoptMod(workshopId, modId)` | workshop ID + expected PZ mod id (`mod.info` `id=`) | jobId; force-downloads, verifies `modId` before overwriting, then installs and records; failure names the contained IDs |
 | `wbInvalidateModCaches()` | - | clears the game's mod-folder scan (`ZomboidFileSystem.resetModFolders()`) and parsed mod-info cache (`ChooseGameInfo.Reset()`). Call on the game thread before `ms:reloadMods()` so it sees new or updated mods |
 | `wbGetJobStatus(jobId)` | jobId | **JSON string** `{"state","done","total","message"[,"error"][,"updates"]}`, or null for unknown jobs. Lua decodes it with `WB_Json.lua`; Kahlua Java-object marshaling is not relied on.
@@ -109,25 +109,25 @@ cached pool. Waiting downloads report `"Queued..."` until they start.
 ### Check for updates
 1. Lua: **Check for updates** calls `wbCheckForUpdates()` and gets a jobId.
 2. Java: calls `GetPublishedFileDetails` for each mapped item and compares `time_updated` with stored `timeUpdated`. It does not download files.
-3. Lua polls with the progress panel. When done, updated rows get an "Update available" badge; **Update all** shows the number of outdated workshop items; the selected mod panel refreshes; and a brief result summary appears. Failures remain until clicked.
+3. Lua polls with the progress panel. When done, updated rows get an "Update available" badge; **Update all** shows the number of outdated workshop items; the selected mod panel refreshes; and a brief result summary appears. Failures remain until clicked. A failed check keeps the previous results (badges and count) since it produced no new information. Items with a download in flight are skipped, not reported as up to date, and named in the summary.
 
 ### Single mod update
 1. Lua: the per-mod button gets the workshop ID with `wbGetWorkshopId(modId)` and calls `wbUpdateMod(workshopId)`. It reads **Update** after a check flags the mod, otherwise **Force update**; either action downloads again without checking first.
 2. Lua polls the progress panel and row label (`Updating...`, `Queued...`, `Up to date`, or failure). On success, the item's update flag clears for all sibling mods and the **Update all** count. Per-item jobs coalesce duplicate clicks and only update the selected item's label; switching away and back shows its live status. `WB_RefreshModList` invalidates game caches and reloads the list. The info panel is not repainted, so its completion message remains visible.
-3. Java serializes the download with other downloads, replaces the item in `Zomboid/mods/`, updates the map, and marks the job done.
+3. Java serializes the download with other downloads. The item's download dir is wiped first (steamcmd doesn't reliably drop files the author removed), then the item is installed into `Zomboid/mods/`: every mod the item now holds is installed, and folders for mods the item no longer holds are removed (only when no other workshop item claims them). The map is updated and the job marked done.
 
 ### Update all
 1. Lua: **Update all** calls `wbUpdateAll()` and gets a jobId.
 2. Java: checks each mapped item; if `time_updated > timeUpdated`, it downloads the item, installs it, and updates the map. The job reports `done/total`.
-3. Lua: on completion, `WB_RefreshModList` calls `wbInvalidateModCaches()` before `ms:reloadMods()`. The game caches mod folders and parsed `mod.info` files, so reloading without invalidation would show stale names and versions.
+3. Lua: on completion, `WB_RefreshModList` calls `wbInvalidateModCaches()` before `ms:reloadMods()`. The game caches mod folders and parsed `mod.info` files, so reloading without invalidation would show stale names and versions. On failure the previous update marks are kept; if any items installed before the failure, the list still refreshes so they appear.
 
 ### Download a new mod
 1. Lua: **Download** opens an ID/URL dialog, parses it with `WB_ParseWorkshopId`, then calls `wbUpdateMod(workshopId)`. Java downloads untracked IDs, installs them in `Zomboid/mods/`, and records them in the map.
 2. Lua polls `wbGetJobStatus(jobId)` and shows progress. On completion, `WB_RefreshModList` invalidates caches and reloads the list so the new mod appears and is tracked.
 
 ### More tools
-1. Lua: **More tools** opens three dialogs. **Export enabled mods** collects tracked or Steam-managed workshop IDs and calls `wbExportModList` synchronously. **Import from text** accepts URLs/IDs and calls `wbImportMods`. **Import from collection** (hidden pending in-game testing) accepts a collection ID/URL; `wbImportCollection` resolves its `children` through `GetPublishedFileDetails` and imports them.
-2. Export writes one URL per line to `Zomboid/workshopbridge-exports/modlist-<timestamp>.txt`; the path is fixed by design. Imports use the serialized download and atomic-install path, one item at a time (`Importing i/N`). On completion, caches are invalidated and the list reloaded.
+1. Lua: **More tools** opens three dialogs. **Export enabled mods** collects tracked or Steam-managed workshop IDs and calls `wbExportModList` synchronously. **Import from text** accepts URLs/IDs and calls `wbImportMods`. **Import from collection** (button disabled pending in-game testing) accepts a collection ID/URL; `wbImportCollection` resolves its `children` through `GetCollectionDetails` and imports them.
+2. Export writes one URL per line to `Zomboid/workshopbridge-exports/modlist-<timestamp>.txt` (millisecond stamp, `CREATE_NEW` plus a numeric fallback so back-to-back exports never overwrite each other); the path is fixed by design. Imports use the serialized download and atomic-install path, one item at a time (`Importing i/N`). On completion, caches are invalidated and the list reloaded.
 
 ### Adopt a mod
 1. Lua: **Adopt...** (shown for "Unknown workshop ID") opens an ID/URL dialog, parses it with `WB_ParseWorkshopId`, and calls `wbAdoptMod(workshopId, modId)`.
@@ -144,7 +144,7 @@ cached pool. Waiting downloads report `"Queued..."` until they start.
 
 - **Update all** and **Check for updates** wrap `ModSelector:create` and join vanilla's bottom-right MapsOrder/ModsOrder/Accept cluster, using its anchors, font, and sizing flags.
 - **More tools** (not yet verified in-game) joins the same cluster.
-- **Per-row status:** wrap `ModListBox:doDrawItem` at class level and key text by `item.item`'s mod ID; the method receives a row wrapper, not `modData`. Class-level wrapping lets patches installed later (such as ModFolders on `OnMainMenuEnter`) chain regardless of load order. Rows are not widgets, so buttons would require manual hit-testing.
+- **Per-row status:** wrap `ModListBox:doDrawItem` at class level and key text by `item.item`'s mod ID; the method receives a row wrapper, not `modData`. Class-level wrapping lets patches installed later (such as ModFolders on `OnMainMenuEnter`) chain regardless of load order. Rows are not widgets, so buttons would require manual hit-testing. The modID-to-workshopID lookup is memoized per mod ID (a Java miss scans every mod folder, and rows draw every frame); `WB_RefreshModList` clears the memo, which every install path calls.
 - **Wrapper rule: propagate return values.** Vanilla `prerender` uses the result of `doDrawItem` to set row height, so wrappers must forward arguments and returns.
 - **Per-mod Update button/status:** `ModInfoPanel.createChildren()` runs once; `updateView(modInfo)` runs on selection. The button reads **Update** when a check flags the mod, otherwise **Force update**. **Adopt...** (verified in-game Oct 2026) replaces it for "Unknown workshop ID"; **Open in Workshop** appears below when an ID is known.
 - Row states (three): in our map → per-mod button (+ "Update available" badge after a check); game's `getWorkshopID()` non-empty → "Managed by Steam"; else grey "Unknown workshop ID".

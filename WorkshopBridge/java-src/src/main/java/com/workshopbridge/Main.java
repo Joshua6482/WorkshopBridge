@@ -14,7 +14,8 @@ public class Main {
         System.out.println("[WorkshopBridge] Java backend loaded via ZombieBuddy "
                 + "(Lua API: wbIsAvailable, wbGetSteamCmdPath, wbGetWorkshopId, "
                 + "wbCheckForUpdates, wbUpdateAll, wbUpdateMod, wbInvalidateModCaches, "
-                + "wbGetJobStatus, wbOpenWorkshopPage)");
+                + "wbGetJobStatus, wbOpenWorkshopPage, wbExportModList, "
+                + "wbImportMods, wbImportCollection, wbAdoptMod)");
         runDiagnostics();
     }
 

@@ -83,18 +83,33 @@ public final class Backend {
         if (!dir.isDirectory() && !dir.mkdirs()) {
             throw new java.io.IOException("cannot create export dir: " + dir);
         }
-        String stamp = java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss")
+        // millisecond stamp plus CREATE_NEW with a numeric fallback: two
+        // exports in the same second must not overwrite each other.
+        String stamp = java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss-SSS")
                 .withZone(java.time.ZoneId.systemDefault())
                 .format(java.time.Instant.now());
-        File out = new File(dir, "modlist-" + stamp + ".txt");
+        java.nio.file.Path out = uniquePath(dir.toPath(), "modlist-" + stamp, ".txt");
         StringBuilder sb = new StringBuilder();
         for (String wsid : workshopIds) {
             sb.append("https://steamcommunity.com/sharedfiles/filedetails/?id=")
                     .append(wsid).append('\n');
         }
-        java.nio.file.Files.writeString(out.toPath(), sb.toString(),
-                java.nio.charset.StandardCharsets.UTF_8);
-        return out.getAbsolutePath();
+        java.nio.file.Files.writeString(out, sb.toString(),
+                java.nio.charset.StandardCharsets.UTF_8,
+                java.nio.file.StandardOpenOption.CREATE_NEW);
+        return out.toFile().getAbsolutePath();
+    }
+
+    private static java.nio.file.Path uniquePath(java.nio.file.Path dir, String base, String ext)
+            throws java.io.IOException {
+        java.nio.file.Path candidate = dir.resolve(base + ext);
+        for (int n = 2; java.nio.file.Files.exists(candidate) && n < 1000; n++) {
+            candidate = dir.resolve(base + "-" + n + ext);
+        }
+        if (java.nio.file.Files.exists(candidate)) {
+            throw new java.io.IOException("cannot find a free export name in " + dir);
+        }
+        return candidate;
     }
 
     /**

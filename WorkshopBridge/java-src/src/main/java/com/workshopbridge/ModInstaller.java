@@ -351,7 +351,8 @@ public final class ModInstaller {
      * a 300ms wait. Anything left behind is repaired by
      * {@link #recoverInterruptedInstalls} on the next run.
      */
-    private static void deleteRecursiveQuiet(Path path, Consumer<String> log) {
+    /** Package-private for JobManager: best-effort recursive delete (retries). */
+    static void deleteRecursiveQuiet(Path path, Consumer<String> log) {
         if (path == null || !Files.exists(path)) {
             return;
         }
