@@ -202,22 +202,26 @@ if [ -z "${VT_API_KEY:-}" ]; then
     echo "above resolves to the scan for everyone."
     echo "Tip: set VT_API_KEY (free VirusTotal API key) to upload automatically."
 else
-    # Submit the zip for scanning (uploading shares the file with
-    # VirusTotal, which is the point for a public release).
-    if command -v curl >/dev/null 2>&1; then
-        echo "release.sh: submitting $ZIP to VirusTotal..."
-        VT_HTTP="$(curl -sS -o /dev/null -w '%{http_code}' -X POST \
-            "https://www.virustotal.com/api/v3/files" \
-            -H "x-apikey: $VT_API_KEY" \
-            -F "file=@$ZIP")" || VT_HTTP="curl-failed"
-        if [ "$VT_HTTP" = "200" ]; then
-            echo "release.sh: VirusTotal accepted the upload; the report link above fills in shortly."
+    # Submitting shares the file with VirusTotal (which is the point for
+    # a public release), so confirm like the other outward-facing steps.
+    if confirm "Upload $ZIP to VirusTotal for scanning?"; then
+        if command -v curl >/dev/null 2>&1; then
+            echo "release.sh: submitting $ZIP to VirusTotal..."
+            VT_HTTP="$(curl -sS -o /dev/null -w '%{http_code}' -X POST \
+                "https://www.virustotal.com/api/v3/files" \
+                -H "x-apikey: $VT_API_KEY" \
+                -F "file=@$ZIP")" || VT_HTTP="curl-failed"
+            if [ "$VT_HTTP" = "200" ]; then
+                echo "release.sh: VirusTotal accepted the upload; the report link above fills in shortly."
+            else
+                echo "release.sh: warning: VirusTotal upload returned HTTP $VT_HTTP;"
+                echo "  upload the zip manually at https://www.virustotal.com/gui/home/upload if needed."
+            fi
         else
-            echo "release.sh: warning: VirusTotal upload returned HTTP $VT_HTTP;"
-            echo "  upload the zip manually at https://www.virustotal.com/gui/home/upload if needed."
+            echo "release.sh: warning: curl not found; skipping VirusTotal upload."
         fi
     else
-        echo "release.sh: warning: curl not found; skipping VirusTotal upload."
+        echo "release.sh: skipping VirusTotal upload."
     fi
 fi
 echo
