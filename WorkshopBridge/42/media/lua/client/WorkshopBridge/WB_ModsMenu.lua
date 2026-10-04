@@ -45,7 +45,9 @@ end
 -- (declared up here: the button handlers below close over these)
 
 local wbLastModPanel = nil -- { panel=..., modInfo=... } currently displayed
-local wbScreen = nil -- the hooked ModSelector, for button-count refreshes
+-- the hooked ModSelector, for button-count refreshes. Global (not file-local):
+-- the WB_Delete dialog module reads it from its own file.
+wbScreen = nil
 -- wsid -> { message=..., failed=bool }: per-mod update jobs in flight (or
 -- failed and not yet retried). The ModInfoPanel is a single shared instance,
 -- so without this a job's poll callbacks would scribble its status over
