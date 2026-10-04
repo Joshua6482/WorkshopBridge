@@ -1,5 +1,6 @@
 -- WorkshopBridge entry point (client).
 require "WorkshopBridge/WB_Config"
+require "WorkshopBridge/WB_Options"
 require "WorkshopBridge/WB_Jobs"
 require "WorkshopBridge/WB_ModsMenu"
 require "WorkshopBridge/WB_ServerJoin"

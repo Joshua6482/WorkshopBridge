@@ -51,10 +51,12 @@ end
 -- hide + flash the summary (or a stuck error) and rescan the mod list so
 -- newly installed mods show up. The visible list is rebuilt each time a
 -- download in the batch finishes (not just at the end), so mods that landed
--- early appear while later ones still download. Note this must be the full
--- refresh (reloadMods), not just wbInvalidateModCaches: the game only
--- re-reads its mod list on reload, so invalidating the caches alone never
--- shows anything new.
+-- early appear while later ones still download - unless the user turned it
+-- off in Options > Mods > WorkshopBridge, in which case only the caches are
+-- invalidated per download and the list rebuilds once at the end. Note this
+-- must be the full refresh (reloadMods), not just wbInvalidateModCaches:
+-- the game only re-reads its mod list on reload, so invalidating the caches
+-- alone never shows anything new.
 local function WB_TrackImportJob(ms, jobId, what)
     print("[WorkshopBridge] import started (" .. tostring(what)
         .. ", job " .. tostring(jobId) .. ")")
@@ -65,7 +67,14 @@ local function WB_TrackImportJob(ms, jobId, what)
             local done = st and tonumber(st.done) or 0
             if done > lastInvalidated then
                 lastInvalidated = done
-                WB_RefreshModList(ms)
+                -- on by default (Options > Mods > WorkshopBridge); when off,
+                -- fall back to invalidating the caches only, with the full
+                -- refresh still happening once at the end of the job
+                if WB_GetRefreshListPerDownload() then
+                    WB_RefreshModList(ms)
+                elseif type(wbInvalidateModCaches) == "function" then
+                    pcall(wbInvalidateModCaches)
+                end
             end
         end,
         onDone = function(st)
