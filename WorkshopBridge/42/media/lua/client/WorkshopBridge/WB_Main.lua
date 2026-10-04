@@ -2,6 +2,7 @@
 require "WorkshopBridge/WB_Config"
 require "WorkshopBridge/WB_Jobs"
 require "WorkshopBridge/WB_ModsMenu"
+require "WorkshopBridge/WB_ServerJoin"
 
 -- "java" | "stub" | nil
 WB_ApiKind = nil
@@ -37,6 +38,7 @@ local function WB_Init()
         return
     end
     WB_HookModsMenu()
+    WB_HookServerJoin()
     print("[WorkshopBridge] initialised (api=" .. WB_ApiKind .. ")")
 end
 

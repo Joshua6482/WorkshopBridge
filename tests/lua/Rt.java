@@ -34,5 +34,16 @@ public class Rt {
         dep2.put("installed", true);
         withDeps.put("deps", Arrays.asList(dep1, dep2));
         System.out.println(Json.stringify(withDeps));
+        // mimic SteamCmdApi.wbGetServerMods() output shape
+        Map<String, Object> serverMods = new LinkedHashMap<>();
+        serverMods.put("steamMode", false);
+        Map<String, Object> sm1 = new LinkedHashMap<>();
+        sm1.put("id", "supermod"); sm1.put("workshopId", "111");
+        sm1.put("name", "Super \"Mod\""); sm1.put("installed", false);
+        Map<String, Object> sm2 = new LinkedHashMap<>();
+        sm2.put("id", "manualmod"); sm2.put("workshopId", "");
+        sm2.put("name", "Manual Mod"); sm2.put("installed", false);
+        serverMods.put("mods", Arrays.asList(sm1, sm2));
+        System.out.println(Json.stringify(serverMods));
     }
 }

@@ -55,6 +55,8 @@ gracefully on other ZombieBuddy versions.
 | `wbInvalidateModCaches()` | - | clears the game's mod-folder scan (`ZomboidFileSystem.resetModFolders()`) and parsed mod-info cache (`ChooseGameInfo.Reset()`). Call on the game thread before `ms:reloadMods()` so it sees new or updated mods |
 | `wbGetJobStatus(jobId)` | jobId | **JSON string** `{"state","done","total","message"[,"error"][,"updates"]}`, or null for unknown jobs. Lua decodes it with `WB_Json.lua`; Kahlua Java-object marshaling is not relied on.
 | `wbOpenWorkshopPage(workshopId)` | workshop ID | `true` if a browser launches. Tries `java.awt.Desktop.browse()`, then `xdg-open`/`gio open` (Linux), `open` (macOS), or `cmd /c start` (Windows). Validates the ID as digits before using it in a command |
+| `wbCheckDependencies(workshopId)` | workshop ID | jobId; resolves the item's workshop "required items" (transitively, best-effort page scrape); the job's `deps` status field lists `{id, title, installed}` |
+| `wbGetServerMods()` | - | **JSON string** `{"steamMode", "mods":[{"id","workshopId","name","installed"}]}` read from the failed join's `connectionDetails` packet (deterministic parse, magic-int validated; `steamMode=true` means the vanilla workshop flow owns it), or null when there is no join to read or the packet is unrecognized |
 
 ### Job status shape (JSON string, decoded in Lua by WB_Json)
 
@@ -138,6 +140,12 @@ cached pool. Waiting downloads report `"Queued..."` until they start.
 2. Java serializes the job with other downloads, force-downloads the item, scans its `mods/` tree, and checks for the selected mod's exact `mod.info` ID. A mismatch names the contained IDs and installs or records nothing. A match installs all mods in the item and records their IDs. The fresh download supplies the remote timestamp, avoiding a phantom update on the next check.
 3. Lua shows the normal job status and refreshes the mod list on completion.
 
+### Server join with missing mods
+1. In non-Steam mode the game skips its workshop states on join: a missing mod fails with `OnConnectFailed` carrying `"... [ModID: x, WorkshopID: y]"` (first missing mod only) and then disconnects. There is no prompt and the join cannot resume; the flow is download, then manual rejoin.
+2. Lua (`WB_ServerJoin`) parses the `[ModID/WorkshopID]` suffix and calls `wbGetServerMods()`, which re-reads the full server mod list from the failed join's `connectionDetails` packet (falling back to the single mod from the message when the parse fails, staying silent in Steam mode where the vanilla flow owns it).
+3. A dialog on the `ConnectToServer` screen lists every missing mod: downloadable ones (workshop ID known) with **Download all**, and manual-install ones (no workshop ID, e.g. transitive `mod.info` `require=` deps) dimmed. No workshop "required items" lookup runs here: the server already enumerates what it needs.
+4. **Download all** runs one `wbImportMods` job (force-install, so a stale map entry cannot no-op it), then `wbInvalidateModCaches()` so the rejoin's mod check sees the new mods, and reports "Downloaded. Go back and rejoin the server."
+
 ### First run / missing pieces
 - Without ZombieBuddy, the game refuses to load the mod because `mod.info` requires it. Its javaagent prompt handles setup; our earlier in-game guidance was unreachable.
 - On first run, `Zomboid/workshopbridge.properties` is created with comments for each setting. The only setting is `steamcmd.path`, an executable-validated override that takes precedence over the managed copy. Existing files are never overwritten.
@@ -153,6 +161,7 @@ cached pool. Waiting downloads report `"Queued..."` until they start.
 - **Per-mod Update button/status:** `ModInfoPanel.createChildren()` runs once; `updateView(modInfo)` runs on selection. The button reads **Update** when a check flags the mod, otherwise **Force update**. **Adopt...** (verified in-game Oct 2026) replaces it for "Unknown workshop ID"; **Open in Workshop** appears below when an ID is known.
 - Row states (three): in our map → per-mod button (+ "Update available" badge after a check); game's `getWorkshopID()` non-empty → "Managed by Steam"; else grey "Unknown workshop ID".
 - Wrapping is idempotent per instance and re-applied by `WB_RefreshModList` after update-all, per-mod update, and download reloads.
+- **Server-join prompt** (not yet verified in-game): `WB_ServerJoin` hooks `Events.OnConnectFailed` and parents its dialog to the visible `ConnectToServer` screen (vanilla shows failures as label text there, not a modal).
 
 ## Design constraints
 

@@ -15,7 +15,8 @@ public class Main {
                 + "(Lua API: wbIsAvailable, wbGetSteamCmdPath, wbGetWorkshopId, "
                 + "wbCheckForUpdates, wbUpdateAll, wbUpdateMod, wbInvalidateModCaches, "
                 + "wbGetJobStatus, wbOpenWorkshopPage, wbExportModList, "
-                + "wbImportMods, wbImportCollection, wbAdoptMod, wbCheckDependencies)");
+                + "wbImportMods, wbImportCollection, wbAdoptMod, wbCheckDependencies, "
+                + "wbGetServerMods)");
         runDiagnostics();
     }
 

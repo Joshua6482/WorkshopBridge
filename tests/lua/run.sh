@@ -42,6 +42,7 @@ run "Download dialog" test_download.lua
 run "More tools" test_tools.lua
 run "Adopt dialog" test_adopt.lua
 run "Dependencies dialog" test_deps.lua
+run "Server-join prompt" test_serverjoin.lua
 
 # Java -> Lua contract: serialize real job statuses with the real Json class,
 # then decode them with the real Lua decoder.

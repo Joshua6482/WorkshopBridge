@@ -8,4 +8,12 @@ public class ChooseGameInfo {
     public static void Reset() {
         resetCalled = true;
     }
+
+    /** Test hook: mod ids the stub reports as installed. */
+    public static final java.util.Set<String> availableModIds = new java.util.HashSet<>();
+
+    /** Mirrors the real lookup: non-null when the mod is installed. */
+    public static Object getAvailableModDetails(String modId) {
+        return availableModIds.contains(modId) ? new Object() : null;
+    }
 }

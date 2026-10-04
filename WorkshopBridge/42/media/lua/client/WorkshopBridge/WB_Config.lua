@@ -67,4 +67,13 @@ WB_Text = {
     DependenciesMore = "...and %d more",
     InstallAll       = "Install all",
     Skip             = "Skip",
+    ServerModsTitle  = "Server requires mods",
+    ServerModsHint   = "Download the missing mods, then go back and rejoin:",
+    ServerModsManual = "Not on the Workshop (install manually):",
+    ServerModsMore   = "...and %d more",
+    ServerModsDownloadAll = "Download all",
+    ServerModsDownloading = "Downloading...",
+    ServerModsDownloaded  = "Downloaded. Go back and rejoin the server.",
+    ServerModsDownloadFailed = "Download failed",
+    Close            = "Close",
 }

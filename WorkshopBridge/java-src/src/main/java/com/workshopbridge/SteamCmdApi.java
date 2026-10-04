@@ -272,4 +272,37 @@ public final class SteamCmdApi {
         }
         return new String[][] { { "xdg-open", url }, { "gio", "open", url } };
     }
+
+    /**
+     * Reads the server's mod list from the failed join's connection details
+     * (see {@link ServerJoinMods}). Returns a JSON object
+     * {@code {steamMode, mods:[{id, workshopId, name, installed}]}}, or null
+     * when there is no join to read from or the packet could not be parsed.
+     * Lua falls back to the single mod named in the OnConnectFailed message
+     * on null. Synchronous and fast: pure buffer parsing, no network.
+     */
+    @LuaMethod(name = "wbGetServerMods", global = true)
+    public static String wbGetServerMods() {
+        try {
+            ServerJoinMods.Result r = ServerJoinMods.read();
+            if (r == null) {
+                return null;
+            }
+            java.util.List<Object> mods = new java.util.ArrayList<>();
+            for (ServerJoinMods.Mod m : r.mods) {
+                java.util.Map<String, Object> e = new java.util.LinkedHashMap<>();
+                e.put("id", m.id);
+                e.put("workshopId", m.workshopId);
+                e.put("name", m.name);
+                e.put("installed", m.installed);
+                mods.add(e);
+            }
+            java.util.Map<String, Object> root = new java.util.LinkedHashMap<>();
+            root.put("steamMode", r.steamMode);
+            root.put("mods", mods);
+            return Json.stringify(root);
+        } catch (Throwable t) {
+            return null;
+        }
+    }
 }
