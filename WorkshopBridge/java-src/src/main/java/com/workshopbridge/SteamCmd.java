@@ -777,8 +777,9 @@ public final class SteamCmd {
 
     /**
      * Minimal tar.gz reader (stdlib only): regular files and directories,
-     * ustar names incl. prefix, octal sizes, exec-bit preservation.
-     * Anything exotic (symlinks, pax headers, ...) is skipped safely.
+     * ustar names incl. prefix, GNU long names, octal sizes, exec-bit
+     * preservation. Anything exotic (symlinks, pax headers, ...) is skipped
+     * safely.
      */
     private static void untarGz(File tgz, File destDir) throws IOException {
         destDir.mkdirs();
@@ -786,6 +787,10 @@ public final class SteamCmd {
         try (InputStream gz = new GZIPInputStream(
                 new BufferedInputStream(new FileInputStream(tgz)))) {
             byte[] header = new byte[512];
+            // GNU tar stores names longer than the 100-byte header field in a
+            // preceding "././@LongLink" entry (type 'L'); its payload is the
+            // real name for the entry that follows.
+            String longName = null;
             while (true) {
                 int got = readFully(gz, header);
                 if (got == 0) {
@@ -802,9 +807,22 @@ public final class SteamCmd {
                 if (!prefix.isEmpty()) {
                     name = prefix + "/" + name;
                 }
+                if (longName != null) {
+                    name = longName;
+                    longName = null;
+                }
                 long size = parseOctal(header, 124, 12);
                 char type = (char) (header[156] & 0xFF);
                 int mode = (int) parseOctal(header, 100, 8);
+                if (type == 'L') {
+                    if (size > 65536) {
+                        throw new IOException("absurd GNU long name length: " + size);
+                    }
+                    byte[] nameBytes = readNBytes(gz, size);
+                    longName = readCString(nameBytes, 0, nameBytes.length);
+                    skipFully(gz, (512 - (size % 512)) % 512);
+                    continue;
+                }
                 File out = new File(destDir, name);
                 String canonical = out.getCanonicalPath();
                 if (!canonical.startsWith(canonicalDest)) {
@@ -883,6 +901,12 @@ public final class SteamCmd {
             throw new IOException("empty octal field in tar header");
         }
         return v;
+    }
+
+    private static byte[] readNBytes(InputStream in, long n) throws IOException {
+        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        copyN(in, bos, n);
+        return bos.toByteArray();
     }
 
     private static void copyN(InputStream in, OutputStream out, long n) throws IOException {
