@@ -215,6 +215,11 @@ planned properly.
   Lua: new `WB_Tools.lua` (+ `WB_GameWorkshopIdFor` promoted to `WB_Jobs.lua`
   as a shared global). Tests: `tests/lua/test_tools.lua` (27 checks),
   Java export/import/parseChildren/parseIdList coverage in `WBTest`.
+  Bugfix Oct 2026: the import-text dialog crashed on open in-game
+  (`setMultipleLine` of null) - the entry's Java peer only exists after
+  `addChild`, so the call moved after the add-child loop; the test stub now
+  enforces that ordering. Collection import button disabled until it can be
+  tested in-game (no small test collection found yet).
 
 - [ ] **Server-join mod download prompt.** Joining a server with mods you
   don't have pops the game's "download missing mods" prompt, which goes
