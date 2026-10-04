@@ -1,7 +1,7 @@
 # Windows compatibility audit — WorkshopBridge
 
 **Date:** 2026-10-03 · **Scope:** audit only, no code changed · **Repo:** `~/workspace/workshopbridge`
-**Read:** `docs/ARCHITECTURE.md`, `PLAN.md`, `README.md`, `docs/RESEARCH.md`, `TESTING.md`,
+**Read:** `docs/ARCHITECTURE.md`, `PLAN.md`, `README.md`, `docs/TESTING.md`,
 all of `WorkshopBridge/java-src/src/main/java/com/workshopbridge/`, the Lua UI in
 `WorkshopBridge/42/media/lua/client/WorkshopBridge/`, `tests/java/` (incl. `fakebin/`).
 
@@ -42,11 +42,11 @@ either skip him or scope his test to "mod loads, shows Managed by Steam, doesn't
 error".
 
 ### P0-2. No verbatim Windows-GOG ZombieBuddy install steps exist
-`docs/RESEARCH.md:23` notes "Windows installer exists; GOG users need the manual
+The earlier research notes said "Windows installer exists; GOG users need the manual
 route — copy JAR + native lib, inject `-agentlib:`/`-javaagent:` JVM flag; **verify
 on a real GOG install**". The README just says "Install ZombieBuddy (one-time)".
 A non-developer cannot follow the manual route from that. Without ZombieBuddy the
-mod only shows the in-game guidance label (`WB_HookModsMenuNoApi`), so the buddy
+mod doesn't load at all (our mod.info has `require=ZombieBuddy`), so the buddy
 test stalls at step zero.
 *Fix proposal:* write the Windows-GOG ZB install as numbered Notepad-level steps
 (where the ZB files come from, exactly where they go, how the GOG launch target
@@ -172,7 +172,7 @@ next save retries. Self-healing; noted for completeness.
 - `workshopbridge.properties` via Notepad: must save as "All files" (not
   `workshopbridge.properties.txt`) and UTF-8 *without* BOM (see P1-2).
 - Spell out reaching the Zomboid folder: Win+R → `%USERPROFILE%` → open `Zomboid`.
-- `TESTING.md`: note the offline suites don't run on native Windows (P1-7);
+- `docs/TESTING.md`: note the offline suites don't run on native Windows (P1-7);
   point developers at WSL2.
 
 ---
@@ -225,8 +225,7 @@ next save retries. Self-healing; noted for completeness.
 ## Suggested buddy checklist (supplement to PLAN.md's Windows items)
 
 1. Confirm GOG (not Steam) install first.
-2. Follow the new verbatim ZB install doc; mod must show Update buttons, not the
-   guidance label.
+2. Follow the new verbatim ZB install doc; mod must show Update buttons.
 3. Click Update on one mod: expect automatic steamcmd bootstrap (~1 min,
    self-update), then a successful install; watch for Defender prompts.
 4. `Check for updates` on a 5-mod item (e.g. 3393821407): expect "1 update
