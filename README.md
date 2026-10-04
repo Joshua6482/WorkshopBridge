@@ -7,15 +7,6 @@ A Lua UI in the Mods menu ("Check for updates", "Update all", per-mod "Update", 
 ![Mods menu buttons](docs/images/menu-buttons.png)
 ![Download dialog](docs/images/download-dialog.png)
 
-## Usage
-
-- **Check for updates** scans the workshop for newer versions of your tracked mods. Nothing is automatic; checks only run when you ask, so a surprise update can't break your save.
-- **Update all (N)** downloads and installs every available update. **Update** / **Force update** on a single mod does the same for one item (it always re-downloads, never checks first).
-- **Download** grabs a brand-new mod: paste a workshop ID or URL.
-- **More tools**: export your enabled mods as a list of workshop links, import mods from pasted text, or import a whole workshop collection.
-- **Adopt...** (on mods showing "Unknown workshop ID"): link a manually installed mod to its workshop item. It re-downloads the item, verifies it actually contains your mod, then tracks it for updates.
-- Downloads run one at a time; a waiting one shows "Queued...". Long operations show a progress panel. If the network is down you get a plain-English message, not a raw exception.
-
 ## Recommended Mods
 
 - [Mod Folders](https://steamcommunity.com/sharedfiles/filedetails/?id=3779201168)
