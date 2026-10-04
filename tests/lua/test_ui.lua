@@ -202,6 +202,31 @@ panel.wbWorkshopBtn.onclick()
 check(openedId == "1111111111", "click opens the mod's workshop page", openedId)
 wbOpenWorkshopPage = realOpen
 
+-- ---------- delete button ----------
+panel:updateView(fakeModInfo("SomeMod", ""))
+check(panel.wbDeleteBtn ~= nil, "delete button exists")
+check(panel.wbDeleteBtn.title == WB_Text.Delete, "delete button title")
+check(panel.wbDeleteBtn.visible, "delete button visible for WB-tracked mod")
+
+panel:updateView(fakeModInfo("WorkshopBridge", "999"))
+check(not panel.wbDeleteBtn.visible, "delete button hidden for Steam-managed mod")
+
+wbGetWorkshopId = function() return nil end
+WB_ClearWorkshopIdCache() -- test swaps the stub mid-run; the game never does
+panel:updateView(fakeModInfo("NoMapMod", ""))
+check(panel.wbDeleteBtn.visible, "delete button visible for manually-installed mod")
+wbGetWorkshopId = realWsid
+WB_ClearWorkshopIdCache()
+
+-- clicking delete opens the confirm dialog for the selected mod
+local realOnDelete = WB_OnDelete
+local deletedPanel = nil
+WB_OnDelete = function(p) deletedPanel = p end
+panel:updateView(fakeModInfo("SomeMod", ""))
+panel.wbDeleteBtn.onclick()
+check(deletedPanel == panel, "delete click routes to the delete flow")
+WB_OnDelete = realOnDelete
+
 -- ---------- check-for-updates flow ----------
 panel:updateView(fakeModInfo("SomeMod", "")) -- re-select; marks seenModIds
 ms.wbCheckBtn.onclick() -- click "Check for updates"

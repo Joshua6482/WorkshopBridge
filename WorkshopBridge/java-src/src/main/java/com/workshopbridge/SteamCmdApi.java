@@ -305,4 +305,48 @@ public final class SteamCmdApi {
             return null;
         }
     }
+
+    /**
+     * Returns the mod ids recorded for a workshop item (JSON array), or null
+     * when the item is not tracked. Used by the delete confirmation dialog
+     * to list sub-mods.
+     */
+    @LuaMethod(name = "wbGetModIds", global = true)
+    public static String wbGetModIds(String workshopId) {
+        try {
+            if (workshopId == null || !workshopId.matches("[0-9]+")) return null;
+            WorkshopMap.Entry e = Backend.get().workshopMap().snapshot().get(workshopId);
+            if (e == null) return null;
+            return Json.stringify(new java.util.ArrayList<>(e.modIds));
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
+    /**
+     * Deletes a mod. With a tracked workshop id, deletes every mod folder
+     * in its map entry and drops the entry (so update-all cannot resurrect
+     * it); with a null/empty workshop id, deletes one manually-installed
+     * mod folder. Every folder passes ModDeleter's safety guards or is
+     * reported, never silently removed. Returns a JSON
+     * {@code {deleted:[], skipped:{id:reason}, failed:[]}}.
+     */
+    @LuaMethod(name = "wbDeleteMod", global = true)
+    public static String wbDeleteMod(String workshopId, String modId) {
+        try {
+            if (modId == null || modId.isEmpty()) return null;
+            Backend backend = Backend.get();
+            ModDeleter.Result r = (workshopId != null && workshopId.matches("[0-9]+")
+                    && backend.workshopMap().snapshot().containsKey(workshopId))
+                    ? ModDeleter.deleteWorkshopItem(backend, workshopId)
+                    : ModDeleter.deleteModFolder(backend, modId);
+            java.util.Map<String, Object> out = new java.util.LinkedHashMap<>();
+            out.put("deleted", r.deleted);
+            out.put("skipped", r.skipped);
+            out.put("failed", r.failed);
+            return Json.stringify(out);
+        } catch (Throwable t) {
+            return null;
+        }
+    }
 }
