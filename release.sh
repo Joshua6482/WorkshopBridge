@@ -242,12 +242,16 @@ if [ "$TAG_TARGET" != "$(git rev-parse HEAD)" ]; then
     echo "  there, while the zip was built from the working tree."
 fi
 if [ -z "$ASSUME_YES" ] && command -v gh >/dev/null 2>&1; then
-    if confirm "Create GitHub release $TAG (tag -> ${TAG_TARGET:0:12}) and upload the zip?"; then
-        gh release create "$TAG" --target "$TAG_TARGET" --title "V$VERSION" \
-            --notes-file "$NOTES" "$ZIP"
+    if confirm "Create DRAFT GitHub release $TAG (tag -> ${TAG_TARGET:0:12}) and upload the zip?"; then
+        # draft: joshua reviews it on github.com and publishes by hand
+        RELEASE_URL="$(gh release create "$TAG" --draft --target "$TAG_TARGET" \
+            --title "V$VERSION" --notes-file "$NOTES" "$ZIP")"
+        echo "Draft release created: $RELEASE_URL"
+        echo "Review it on github.com and publish when ready."
         exit 0
     fi
 fi
 echo "To publish manually:"
-echo "  gh release create $TAG --target $TAG_TARGET --title \"V$VERSION\" \\"
+echo "  gh release create $TAG --draft --target $TAG_TARGET --title \"V$VERSION\" \\"
 echo "    --notes-file \"$NOTES\" \"$ZIP\""
+echo "then review the draft on github.com and publish it by hand."
