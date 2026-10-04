@@ -25,4 +25,4 @@ MIT, see [LICENSE](LICENSE).
 
 ---
 
-Disclaimer: Vibecoded, Most of the source code manually reviewed and tweaked , but still. 
+Disclaimer: Vibecoded, Most of the source code manually reviewed and tweaked, but still. 
