@@ -110,6 +110,41 @@ public final class SteamCmd {
 
     public SteamCmd(File zomboidDir) {
         this.zomboidDir = zomboidDir;
+        ensurePropertiesFile();
+    }
+
+    /**
+     * Creates {@code <Zomboid>/workshopbridge.properties} with built-in
+     * commented documentation when it doesn't exist yet, so users discover
+     * the available settings by opening the file. Never touches an existing
+     * file (user edits are sacred). Best effort: a read-only Zomboid dir
+     * just means no template, not a broken backend.
+     */
+    private void ensurePropertiesFile() {
+        File props = new File(zomboidDir, "workshopbridge.properties");
+        if (props.isFile()) {
+            return;
+        }
+        String template =
+                "# WorkshopBridge settings.\n"
+                + "# Lines starting with # are comments; edit this file and restart the game\n"
+                + "# (or reload Lua) to apply changes.\n"
+                + "#\n"
+                + "# steamcmd.path: optional. Point this at your own steamcmd executable\n"
+                + "# and WorkshopBridge will use it instead of downloading its own copy.\n"
+                + "# Use forward slashes, even on Windows (a single backslash is an\n"
+                + "# escape in properties files, so C:\\steamcmd would break).\n"
+                + "# Examples:\n"
+                + "#   steamcmd.path=C:/steamcmd/steamcmd.exe\n"
+                + "#   steamcmd.path=/home/joshua/steamcmd/steamcmd.sh\n"
+                + "# Leave it empty (or delete the file) to use the automatic download.\n"
+                + "steamcmd.path=\n";
+        try {
+            Files.writeString(props.toPath(), template, StandardCharsets.UTF_8);
+            System.out.println("[WorkshopBridge] created " + props);
+        } catch (IOException e) {
+            System.out.println("[WorkshopBridge] cannot create " + props + ": " + e);
+        }
     }
 
     /**
