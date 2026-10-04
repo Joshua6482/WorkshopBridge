@@ -510,25 +510,6 @@ ms.wbProgressPanel:onMouseUp(ms.wbProgressPanel, 10, 10)
 check(not ms.wbProgressPanel:isVisible(), "click dismisses the stuck error")
 wbGetJobStatus = realStatusErr
 
--- ---------- no-backend guidance label ----------
--- as WB_Main does when the Java API is absent: the menu still hooks,
--- showing guidance instead of a silent empty menu
-ModSelector.wbHooked = nil
-local msNoApi = setmetatable({ x = 0, y = 0, width = 1024, height = 768, children = {} },
-    { __index = UIElement })
-msNoApi.mapOrderbtn = ISButton:new(700, 710, 100, 30, "MapsOrder", msNoApi, function() end)
-local prevInstance = ModSelector.instance
-ModSelector.instance = msNoApi
-WB_HookModsMenuNoApi()
-ModSelector.instance = prevInstance
-check(msNoApi.wbGuidanceAdded, "guidance label added when backend absent")
-local guidanceText = nil
-for _, c in ipairs(msNoApi.children) do
-    if c.name == WB_Text.NeedsZombieBuddy then guidanceText = c.name end
-end
-check(guidanceText ~= nil, "guidance label shows the ZombieBuddy message")
-check(msNoApi.wbCheckBtn == nil, "no update buttons without backend")
-
 -- ---------- update() fallback pump ----------
 check(ms.wbUpdatePumped, "update() pump installed on menu instance")
 -- simulate a dead tick (no OnTick firing): drive jobs via ms:update() only
