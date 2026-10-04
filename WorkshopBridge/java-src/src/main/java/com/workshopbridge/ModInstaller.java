@@ -41,10 +41,15 @@ public final class ModInstaller {
      * {@code stageDir} holds the transient staging/backup dirs; it must be
      * on the same filesystem as {@code modsDir} for the renames to stay
      * atomic (a subdirectory of the workshop cache satisfies this).
+     * Each installed mod folder gets a {@link ModSidecar} stamp carrying
+     * {@code workshopId}/{@code timeUpdated} (skipped when
+     * {@code workshopId} is blank); the stamp is written into the staging
+     * tree before the atomic rename, so a live mod folder always carries
+     * a current stamp.
      * Returns the installed PZ mod ids (from each mod.info {@code id=} line).
      */
     public static List<String> install(File itemDir, File modsDir, File stageDir,
-            Consumer<String> log) throws IOException {
+            String workshopId, long timeUpdated, Consumer<String> log) throws IOException {
         File src = new File(itemDir, "mods");
         if (!src.isDirectory()) {
             throw new IOException("no mods/ in downloaded item: " + itemDir);
@@ -66,7 +71,8 @@ public final class ModInstaller {
             File dest = new File(modsDir, modDir.getName());
             log.accept("Installing " + modId + " -> " + dest.getAbsolutePath());
             try {
-                atomicReplace(modDir.toPath(), dest.toPath(), stageDir.toPath(), log);
+                atomicReplace(modDir.toPath(), dest.toPath(), stageDir.toPath(),
+                        workshopId, modId, timeUpdated, log);
             } catch (IOException e) {
                 throw withLongPathHint(e, dest);
             }
@@ -96,18 +102,29 @@ public final class ModInstaller {
 
     /**
      * Replaces {@code dest} with the tree at {@code src} atomically:
-     * copy aside into the stage dir, then rename old->backup and
-     * staging->dest. On failure the old tree is restored when possible;
-     * anything unrecoverable is left for {@link #recoverInterruptedInstalls}
-     * on the next run.
+     * copy aside into the stage dir, stamp the provenance sidecar, then
+     * rename old->backup and staging->dest. On failure the old tree is
+     * restored when possible; anything unrecoverable is left for
+     * {@link #recoverInterruptedInstalls} on the next run.
      */
     private static void atomicReplace(Path src, Path dest, Path stageDir,
+            String workshopId, String modId, long timeUpdated,
             Consumer<String> log) throws IOException {
         String tag = Long.toHexString(System.nanoTime());
         String base = dest.getFileName().toString();
         Path staging = stageDir.resolve(base + ".new-" + tag);
         Path backup = stageDir.resolve(base + ".old-" + tag);
         copyRecursive(src, staging);
+        if (workshopId != null && !workshopId.isBlank()) {
+            try {
+                ModSidecar.write(staging.toFile(), workshopId, modId, timeUpdated);
+            } catch (IOException e) {
+                // the swap has not happened yet: failing here leaves the
+                // old tree untouched, which beats a live mod with no stamp
+                deleteRecursiveQuiet(staging, log);
+                throw e;
+            }
+        }
         boolean hadDest = Files.exists(dest);
         try {
             if (hadDest) {

@@ -407,6 +407,10 @@ public class WBTest {
                 "zomboid dir honors test property", zomboidDir);
         backend.workshopMap().record("111", List.of("ModA"), 1000L);
         backend.workshopMap().record("222", List.of("ModB"), 1000L);
+        // the check/update-all jobs prune map entries whose folders are
+        // gone, so the fixtures they exercise must actually be installed
+        makeTestMod(backend, "ModA", "ModA");
+        makeTestMod(backend, "ModB", "ModB");
         File mapFile = new File(zomboidDir, "workshopbridge_map.json");
         check(mapFile.isFile(), "map file written");
         check(!new File(zomboidDir, "workshopbridge_map.json.tmp").exists(),
@@ -644,6 +648,7 @@ public class WBTest {
             // update installing it while the check is in flight (slow API)
             // must not resurrect a stale "update available" badge.
             backend.workshopMap().record("33333", List.of("FakeMod-33333"), 1000L);
+            makeTestMod(backend, "FakeMod-33333", "FakeMod-33333");
             apiJson.set("{\"response\":{\"publishedfiledetails\":["
                     + "{\"publishedfileid\":\"33333\",\"time_updated\":2000,"
                     + "\"result\":1}]}}");
@@ -978,16 +983,24 @@ public class WBTest {
         File itemV1 = new File(scratch, "itemV1/mods/ReMod");
         writeFile(new File(itemV1, "common/mod.info"), "id=ReMod\n");
         writeFile(new File(itemV1, "old.txt"), "v1");
-        ModInstaller.install(new File(scratch, "itemV1"), modsDir, stageDir, quiet);
+        ModInstaller.install(new File(scratch, "itemV1"), modsDir, stageDir,
+                "424240", 5555L, quiet);
         check(new File(modsDir, "ReMod/old.txt").isFile(), "v1 installed");
         File itemV2 = new File(scratch, "itemV2/mods/ReMod");
         writeFile(new File(itemV2, "common/mod.info"), "id=ReMod\n");
         writeFile(new File(itemV2, "new.txt"), "v2");
-        List<String> ids = ModInstaller.install(new File(scratch, "itemV2"), modsDir, stageDir, quiet);
+        List<String> ids = ModInstaller.install(new File(scratch, "itemV2"), modsDir, stageDir,
+                "424240", 5555L, quiet);
         File reMod = new File(modsDir, "ReMod");
         check(new File(reMod, "new.txt").isFile() && !new File(reMod, "old.txt").exists(),
                 "reinstall clean-replaces (stale files gone)");
         check(ids.equals(List.of("ReMod")), "install returns mod ids", ids);
+        ModSidecar stamp = ModSidecar.read(reMod);
+        check(stamp != null && "424240".equals(stamp.workshopId)
+                        && "ReMod".equals(stamp.modId) && stamp.timeUpdated == 5555L,
+                "install stamps the sidecar (workshop id, mod id, timeUpdated)");
+        check(stamp != null && stamp.lastDownloaded > 0L,
+                "sidecar records lastDownloaded");
         boolean leftovers = false;
         File[] modEntries = modsDir.listFiles();
         if (modEntries != null) {
@@ -1201,6 +1214,94 @@ public class WBTest {
         // the desktop module is present or not (the sandbox has no display)
         SteamCmdApi.openWithDesktop("https://example.com/x");
         check(true, "openWithDesktop never throws");
+
+        // ---- 19. sidecar re-link: an archived mod moved back re-links ----
+        // map is ground truth: with no entry, the lookup falls back to the
+        // stamp in the mod folder and merges it into the map
+        File scMod = new File(backend.modsDir(), "SidecarMod");
+        writeFile(new File(scMod, "common/mod.info"), "id=SidecarMod\n");
+        ModSidecar.write(scMod, "424242", "SidecarMod", 1234L);
+        check(backend.workshopMap().getWorkshopId("SidecarMod") == null,
+                "no map entry before re-link");
+        check("424242".equals(backend.getWorkshopId("SidecarMod")),
+                "sidecar re-links a returned mod");
+        WorkshopMap.Entry scEntry = backend.workshopMap().snapshot().get("424242");
+        check(scEntry != null && scEntry.modIds.equals(List.of("SidecarMod"))
+                        && scEntry.timeUpdated == 1234L && scEntry.lastDownloaded > 0L,
+                "re-link merges the stamp into the map");
+        WorkshopMap reloaded2 = new WorkshopMap(new File(zomboidDir, "workshopbridge_map.json"));
+        reloaded2.load();
+        check("424242".equals(reloaded2.getWorkshopId("SidecarMod")),
+                "re-linked entry survives a reload (atomic save)");
+        // a second mod folder stamped for an already-tracked item merges
+        // into the existing entry without touching its timestamps
+        backend.workshopMap().record("424243", List.of("OtherMod"), 9999L);
+        File scMod2 = new File(backend.modsDir(), "SidecarMod2");
+        writeFile(new File(scMod2, "common/mod.info"), "id=SidecarMod2\n");
+        ModSidecar.write(scMod2, "424243", "SidecarMod2", 1111L);
+        check("424243".equals(backend.getWorkshopId("SidecarMod2")),
+                "sidecar merges into an existing entry");
+        WorkshopMap.Entry scEntry2 = backend.workshopMap().snapshot().get("424243");
+        check(scEntry2 != null && scEntry2.modIds.contains("OtherMod")
+                        && scEntry2.modIds.contains("SidecarMod2")
+                        && scEntry2.timeUpdated == 9999L,
+                "merge adds the mod id, keeps entry timestamps");
+        // a stamp for a mod id the folder no longer declares is stale: the
+        // user turned the copy into a different mod, so it must not re-link
+        File staleMod = new File(backend.modsDir(), "StaleClaim");
+        writeFile(new File(staleMod, "common/mod.info"), "id=StaleClaim\n");
+        ModSidecar.write(staleMod, "424244", "OldId", 1234L);
+        check(backend.getWorkshopId("StaleClaim") == null
+                        && !backend.workshopMap().snapshot().containsKey("424244"),
+                "stale stamp (mod id changed) does not re-link");
+        // a corrupt stamp is ignored, never fatal
+        File corruptMod = new File(backend.modsDir(), "CorruptClaim");
+        writeFile(new File(corruptMod, "common/mod.info"), "id=CorruptClaim\n");
+        writeFile(new File(corruptMod, "workshopbridge.json"), "{not json");
+        check(backend.getWorkshopId("CorruptClaim") == null,
+                "corrupt stamp is ignored");
+        // an install without a workshop id writes no stamp
+        File itemV3 = new File(scratch, "itemV3/mods/NoStampMod");
+        writeFile(new File(itemV3, "common/mod.info"), "id=NoStampMod\n");
+        ModInstaller.install(new File(scratch, "itemV3"), modsDir, stageDir,
+                "", 0L, quiet);
+        check(!new File(modsDir, "NoStampMod/workshopbridge.json").exists(),
+                "blank workshop id skips the stamp");
+
+        // ---- 20. reconcile: entries with no folders are pruned ----
+        // (check/update-all call this first, so a hand-deleted mod is
+        // neither queried nor resurrected by update-all)
+        JobManager singletonJobs = backend.jobs();
+        backend.workshopMap().record("434343", List.of("GoneModA", "GoneModB"), 1000L);
+        singletonJobs.reconcileMapWithModsDir();
+        check(!backend.workshopMap().snapshot().containsKey("434343"),
+                "entry with all folders gone is pruned");
+        // partial: only the missing sub-mod drops, timestamps kept
+        backend.workshopMap().record("434344", List.of("HalfGone", "StillHere"), 7777L);
+        makeTestMod(backend, "StillHere", "StillHere");
+        singletonJobs.reconcileMapWithModsDir();
+        WorkshopMap.Entry partial = backend.workshopMap().snapshot().get("434344");
+        check(partial != null && partial.modIds.equals(List.of("StillHere"))
+                        && partial.timeUpdated == 7777L,
+                "partial entry loses only the missing mod id");
+        // installed entries are untouched
+        check("111".equals(backend.workshopMap().getWorkshopId("ModA")),
+                "installed entry survives reconcile");
+        // removeModIds edge cases
+        backend.workshopMap().removeModIds("no-such-item", List.of("X"));
+        check(true, "removeModIds on absent entry is a no-op");
+        // archive round trip: folder moved out -> pruned -> moved back ->
+        // the sidecar re-links it (this is why the stamp exists)
+        File archived = new File(backend.modsDir(), "SidecarMod");
+        File outside = new File(scratch, "archive/SidecarMod");
+        outside.getParentFile().mkdirs();
+        Files.move(archived.toPath(), outside.toPath());
+        singletonJobs.reconcileMapWithModsDir();
+        check(!backend.workshopMap().snapshot().containsKey("424242"),
+                "archived mod pruned from map");
+        Files.move(outside.toPath(), archived.toPath());
+        check("424242".equals(backend.getWorkshopId("SidecarMod")),
+                "moved-back mod re-links from its sidecar");
 
         System.out.println(failures == 0 ? "ALL TESTS PASSED" : failures + " FAILURES");
         System.exit(failures == 0 ? 0 : 1);

@@ -113,7 +113,11 @@ public final class Backend {
     }
 
     /**
-     * PZ mod id -> workshop id, with some self-healing
+     * PZ mod id -> workshop id, with some self-healing.
+     * The map is the ground truth; only when it misses do we look at the
+     * mod folder itself: first the folder-name repair below, then the
+     * mod's sidecar stamp (a mod archived to disk and moved back re-links
+     * from the stamp and is merged into the map).
      */
     public synchronized String getWorkshopId(String modId) {
         String wsid = workshopMap.getWorkshopId(modId);
@@ -134,6 +138,14 @@ public final class Backend {
                 System.out.println("[WorkshopBridge] repaired map entry for "
                         + modId + " (was recorded as folder \"" + dir.getName() + "\")");
                 return byFolder;
+            }
+            ModSidecar sidecar = ModSidecar.read(dir);
+            if (sidecar != null) {
+                workshopMap.mergeSidecar(sidecar.workshopId, sidecar.modId,
+                        sidecar.timeUpdated, sidecar.lastDownloaded);
+                System.out.println("[WorkshopBridge] re-linked " + modId
+                        + " to workshop item " + sidecar.workshopId + " (sidecar stamp)");
+                return sidecar.workshopId;
             }
         }
         return null;
