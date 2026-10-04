@@ -4,7 +4,8 @@
 # Full packaging pass:
 #   1. ./compile.sh with diagnostics off (dev-only probes excluded)
 #   2. ./sign.sh (ZBS Ed25519 sidecar for the fresh jar)
-#   3. stages the mod folder (42/, common/, poster.png) and stamps
+#   3. stages the mod folder (42/, common/, poster.png, plus the
+#      java-src Java project: src/, build.gradle, README.md) and stamps
 #      modversion=<version> into the staged mod.info (the repo file
 #      is left untouched)
 #   4. zips it to dist/WorkshopBridge-<version>.zip
@@ -115,16 +116,29 @@ fi
 [ -f "$JAR" ] || die "jar not found: $JAR"
 [ -f "$JAR.zbs" ] || die "sidecar not found: $JAR.zbs (run ./sign.sh)"
 
-# 3. Stage exactly what the game loads: 42/, common/, poster.png.
-#    java-src/ is build workspace, not part of the mod.
 cp_tree() { # cp -a, falling back to plain recursive copy where the
             # filesystem will not let us preserve ownership
     cp -a "$@" 2>/dev/null || cp -r "$@"
 }
+# 3. Stage the mod: what the game loads, plus the Java sources.
+#    (The official ZombieBuddy sample mod ships its java project inside
+#    the mod folder; the game ignores the extra directory, and having
+#    the source next to the jar is a trust win for a mod whose jar
+#    spawns external processes.)
+#    java-src/libs/ is deliberately excluded: it holds the compile-only
+#    dependency jars (ZombieBuddy.jar, and possibly the proprietary
+#    projectzomboid.jar), which must not be redistributed. The java-src
+#    README documents the one-time libs setup, so rebuilders are covered.
 rm -rf "$STAGE"
-mkdir -p "$STAGE/WorkshopBridge"
+mkdir -p "$STAGE/WorkshopBridge" "$STAGE/WorkshopBridge/java-src"
 cp_tree WorkshopBridge/42 WorkshopBridge/common WorkshopBridge/poster.png \
     "$STAGE/WorkshopBridge/"
+for f in src build.gradle README.md; do
+    [ -e "WorkshopBridge/java-src/$f" ] \
+        || die "expected WorkshopBridge/java-src/$f for the release zip"
+done
+cp_tree WorkshopBridge/java-src/src WorkshopBridge/java-src/build.gradle \
+    WorkshopBridge/java-src/README.md "$STAGE/WorkshopBridge/java-src/"
 STAGED_INFO="$STAGE/WorkshopBridge/common/mod.info"
 if grep -q '^modversion=' "$STAGED_INFO"; then
     sed -i "s/^modversion=.*/modversion=$VERSION/" "$STAGED_INFO"
@@ -159,6 +173,9 @@ Built for non-Steam (GOG) players.
    into the \`mods\` folder inside your Zomboid folder
    (\`~/Zomboid/mods\` on Linux, \`%USERPROFILE%\\Zomboid\\mods\` on Windows).
 3. Enable it in the Mods menu like any other mod.
+
+The Java sources ship inside the zip under `java-src/` (the game ignores
+that folder), so anyone can audit or rebuild the jar.
 
 ## Verify this download
 
