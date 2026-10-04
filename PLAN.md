@@ -71,22 +71,24 @@ verbatim).
 ## Mod compatibility notes
 
 - **ModFolders** (workshop 3779201168, v0.2.26, ~2k-line Lua; audited Oct
-  2026): no crash-level collision. It patches `ModListBox.doDrawItem` /
-  `onMouseDown` / `onSelectItem` and `ModListPanel.updateView` at class
-  level on OnFETick/OnMainMenuEnter; we wrap `list.doDrawItem` per instance
-  at Mods-menu open, chaining whatever the class currently has, so the
-  normal order chains cleanly (WB badge -> ModFolders folder rows/icons ->
-  vanilla). Two things fixed on our side from the audit: (1) the row
-  "update available" badge never drew in-game at all - the wrapper passed
-  the listbox row wrapper to `WB_GetModId` instead of `item.item`
-  (the Lua test masked it by passing modInfo directly); now unwrapped, and
-  folder rows safely yield no badge. (2) `WB_HookInstance` now re-syncs to
-  the current class-level `doDrawItem` on re-hook, so a class patch
-  landing after our instance wrap can't be shadowed by it. The badge also
-  shifts left when ModFolders' panel controls are detected, clearing its
-  +/- icons. Residual quirk (ModFolders' design, not ours): selecting a
-  folder row doesn't update the info panel, so our Update button keeps
-  showing the last-selected mod until a real mod row is picked.
+  2026): real collision found and fixed. It patches `ModListBox.doDrawItem`
+  at class level on OnMainMenuEnter, but the MainScreen builds the
+  ModSelector (and its listbox) eagerly at boot, before that. Our old
+  per-instance `doDrawItem` wrap therefore captured vanilla as its base and
+  shadowed ModFolders' later class patch, so folder rows rendered through
+  vanilla (big red X, no folder buttons). Fixed by wrapping
+  `ModListBox.doDrawItem` at class level instead: whoever wraps last chains
+  the previous implementation, so install order no longer matters. Same
+  audit also fixed a latent bug in our code: the row "update available"
+  badge never drew in-game at all, because the wrapper passed the listbox
+  row wrapper to `WB_GetModId` instead of `item.item` (the Lua test masked
+  it by passing modInfo directly); now unwrapped, and folder rows safely
+  yield no badge. The badge shifts left when ModFolders' panel controls are
+  detected (per draw via `listbox.parent`), clearing its +/- icons. Lua
+  tests cover both install orders. Residual quirk (ModFolders' design, not
+  ours): selecting a folder row doesn't update the info panel, so our
+  Update button keeps showing the last-selected mod until a real mod row
+  is picked.
 
 ## Backlog (from live testing, Oct 2026)
 
