@@ -28,9 +28,7 @@ public final class JobManager {
         volatile int total;
         volatile String message = "";
         volatile String error;
-        /** workshopIds with updates available (check jobs): the workshop
-         *  item is the update unit, not the individual mod (one item can
-         *  hold several mods). */
+        // workshopIds with updates available
         volatile List<String> updates = Collections.emptyList();
 
         Job(String id, String kind) {
@@ -63,13 +61,7 @@ public final class JobManager {
         t.setDaemon(true);
         return t;
     });
-    /**
-     * Downloads run one at a time: concurrent steamcmd processes share one
-     * install dir and gain nothing (each is network-bound with per-process
-     * overhead), while serialization keeps behavior deterministic and the
-     * UI trivial (one active download). The queue is implicit in the
-     * executor; a waiting job reports "Queued..." until it starts.
-     */
+    // Concurrent downloads
     private final ExecutorService downloadExec = Executors.newSingleThreadExecutor(r -> {
         Thread t = new Thread(r, "workshopbridge-download");
         t.setDaemon(true);
@@ -78,12 +70,8 @@ public final class JobManager {
     private final ConcurrentHashMap<String, Job> jobs = new ConcurrentHashMap<>();
     /** The currently running check job, if any: repeat clicks coalesce onto it. */
     private volatile Job activeCheck;
-    /**
-     * Workshop ids with a download+install currently in flight (on the
-     * single download thread). A concurrent check must not report these as
-     * "update available": the new bits are on their way and its map
-     * snapshot predates them.
-     */
+
+    // Workshop ids with a download currently in flight
     private final Set<String> inFlight = ConcurrentHashMap.newKeySet();
 
     JobManager(Backend backend) {
@@ -91,8 +79,6 @@ public final class JobManager {
     }
 
     public String submitCheck() {
-        // coalesce: a check is idempotent, so repeat clicks while one is
-        // running just rejoin the same job instead of spawning more threads
         Job cur = activeCheck;
         if (cur != null && cur.state == State.RUNNING) {
             return cur.id;
@@ -120,7 +106,6 @@ public final class JobManager {
         return submitOn(exec, kind, task, "");
     }
 
-    /** Download-bearing jobs: serialized, "Queued..." until actually started. */
     private String submitDownload(String kind, JobTask task) {
         return submitOn(downloadExec, kind, task, "Queued...");
     }
@@ -266,9 +251,8 @@ public final class JobManager {
         try {
             File itemDir = backend.steamCmd().download(
                     workshopId, backend.cacheDir(), line -> System.out.println("[WorkshopBridge] " + line));
-            // staging lives under the workshop cache (same filesystem as mods/,
-            // so the swap renames stay atomic) and outside mods/ itself, where
-            // the game's file watcher would trip over the transient backup dirs
+            // staging lives under the workshop cache and outside mods/ itself, 
+            // where the game's file watcher would trip over the transient backup dirs
             List<String> modIds = ModInstaller.install(
                     itemDir, backend.modsDir(),
                     new File(backend.cacheDir(), ".install-staging"),

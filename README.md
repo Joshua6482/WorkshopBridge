@@ -20,4 +20,5 @@ A Lua UI in the Mods menu ("Check for updates", "Update all", per-mod "Update", 
 MIT, see [LICENSE](LICENSE).
 
 ---
-Built with help from Muse, Meta's AI assistant.
+
+Disclaimer: Vibecoded, Most of the source code manually reviewed and tweaked , but still. 
