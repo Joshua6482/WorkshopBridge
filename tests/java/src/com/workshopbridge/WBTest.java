@@ -172,6 +172,20 @@ public class WBTest {
                 "net passthrough");
 
         // ---- 2c. dependency ("required items") parsing ----
+        // The fixture below is a REAL captured Steam workshop page, and
+        // Steam's markup drifts over time. Warn when the capture is over a
+        // month old so a passing test doesn't hide a stale fixture. The
+        // date is hardcoded because git does not preserve file mtimes.
+        java.time.LocalDate fixtureCaptured = java.time.LocalDate.of(2026, 10, 4);
+        long fixtureAgeDays = java.time.temporal.ChronoUnit.DAYS.between(
+                fixtureCaptured, java.time.LocalDate.now(java.time.ZoneOffset.UTC));
+        if (fixtureAgeDays > 30) {
+            System.out.println("WARNING: tests/java/fixtures/workshoppage-requireditems.html "
+                    + "was captured " + fixtureAgeDays + " days ago (" + fixtureCaptured + "). "
+                    + "Steam may have changed the RequiredItems markup since; "
+                    + "re-capture it (curl https://steamcommunity.com/sharedfiles/filedetails/?id=3799732653) "
+                    + "and update fixtureCaptured above.");
+        }
         String depHtml = Files.readString(
                 new File(fixtureDir, "workshoppage-requireditems.html").toPath(),
                 StandardCharsets.UTF_8);
