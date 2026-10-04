@@ -8,6 +8,31 @@ local function check(cond, name, extra)
 end
 
 -- ---------- stub PZ environment ----------
+-- PZAPI.ModOptions stub mirroring the vanilla options system: create() +
+-- addTickBox() register, getOptions()/getOption()/getValue() read back.
+-- (The real one persists to ModOptions.ini; the stub just holds values.)
+local registeredOptions = nil
+PZAPI = { ModOptions = { Data = {}, Dict = {} } }
+function PZAPI.ModOptions:create(modOptionsID, name)
+    local opts = { modOptionsID = modOptionsID, name = name, data = {}, dict = {} }
+    function opts:getOption(id) return self.dict[id] end
+    function opts:addTickBox(id, label, value, tooltip)
+        local opt = { type = "tickbox", id = id, name = label,
+            value = value, tooltip = tooltip }
+        function opt:getValue() return self.value end
+        function opt:setValue(v) self.value = v end
+        table.insert(self.data, opt)
+        self.dict[id] = opt
+        return opt
+    end
+    table.insert(PZAPI.ModOptions.Data, opts)
+    PZAPI.ModOptions.Dict[modOptionsID] = opts
+    registeredOptions = opts
+    return opts
+end
+function PZAPI.ModOptions:getOptions(modOptionsID)
+    return PZAPI.ModOptions.Dict[modOptionsID]
+end
 Events = {}
 Events.OnTick = { handlers = {} }
 function Events.OnTick.Add(fn) table.insert(Events.OnTick.handlers, fn) end
@@ -105,6 +130,25 @@ local function tick(n)
 end
 
 check(WB_ApiKind == "stub", "boot installs debug stub")
+
+-- ---------- mod options (Options > Mods > WorkshopBridge) ----------
+check(registeredOptions ~= nil, "mod options registered with PZAPI")
+check(registeredOptions.modOptionsID == "WorkshopBridge"
+        and registeredOptions.name == "WorkshopBridge",
+    "options section id and title")
+local refreshOpt = registeredOptions:getOption("RefreshListPerDownload")
+check(refreshOpt ~= nil and refreshOpt:getValue() == true,
+    "per-download refresh tickbox present, default on")
+check(WB_GetRefreshListPerDownload() == true,
+    "option reads true by default")
+-- degrades to on when the options API is absent (e.g. game changes)
+local savedPZAPI = PZAPI
+PZAPI = nil
+check(WB_GetRefreshListPerDownload() == true,
+    "option defaults to on without the API")
+PZAPI = savedPZAPI
+check(WB_GetRefreshListPerDownload() == true,
+    "option still reads true after API restore")
 
 -- ---------- WB_ParseImportText unit tests ----------
 local ids = WB_ParseImportText("2685600088\nhttps://steamcommunity.com/sharedfiles/filedetails/?id=12345\n\njunk line\n2685600088\n")
@@ -216,6 +260,31 @@ check((ms.reloaded or 0) - reloadedBefore >= 2,
 check(invalidateCount >= 2,
     "mod caches invalidated per download, not just at the end", invalidateCount)
 wbInvalidateModCaches = realInvalidate
+
+-- ---------- per-download refresh disabled via mod option ----------
+refreshOpt:setValue(false)
+check(WB_GetRefreshListPerDownload() == false,
+    "option reads false when turned off")
+local invalidateOff = 0
+wbInvalidateModCaches = function() invalidateOff = invalidateOff + 1 end
+local reloadedOffBefore = ms.reloaded or 0
+ms.wbToolsBtn.onclick()
+ms.wbToolsDialog.importTextBtn.onclick()
+local tdlg2 = ms.wbImportTextDialog
+tdlg2.entry:setText("333\n444\n")
+tdlg2.importBtn.onclick()
+check(ms.wbImportTextDialog == nil, "second import starts with option off")
+tick(200)
+local reloadedOffDelta = (ms.reloaded or 0) - reloadedOffBefore
+check(reloadedOffDelta == 1,
+    "no per-download rebuilds when option off (end refresh only)",
+    tostring(reloadedOffDelta))
+check(invalidateOff >= 2,
+    "caches still invalidated per download when option off", invalidateOff)
+wbInvalidateModCaches = realInvalidate
+refreshOpt:setValue(true)
+check(WB_GetRefreshListPerDownload() == true,
+    "option reads true when turned back on")
 
 -- cancel closes without importing
 importedCsv = nil
