@@ -597,6 +597,32 @@ public class WBTest {
         check(zombie.gameStates.ChooseGameInfo.resetCalled,
                 "wbInvalidateModCaches resets the mod info cache");
 
+        // ---- 17. Main.main exposes the wb* Lua globals on cold boot ----
+        // (ZB's automatic @LuaMethod discovery runs in its afterExposeAll
+        // phase, before our jar loads; without the manual step the globals
+        // never appear until a Lua reload.)
+        me.zed_0xff.zombie_buddy.Exposer.addCalled = false;
+        me.zed_0xff.zombie_buddy.Exposer.addedClass = null;
+        FakeLuaExposer.exposedCount = 0;
+        zombie.Lua.LuaManager.exposer = new FakeLuaExposer();
+        Main.main(new String[0]);
+        check(me.zed_0xff.zombie_buddy.Exposer.addCalled,
+                "Main.main registers SteamCmdApi for global Lua exposure");
+        check(me.zed_0xff.zombie_buddy.Exposer.addedClass == SteamCmdApi.class,
+                "registered class is SteamCmdApi");
+        check(FakeLuaExposer.exposedCount == 1,
+                "Main.main exposes wb* globals immediately", FakeLuaExposer.exposedCount);
+        // no Lua engine yet: still registers for later, exposes nothing,
+        // and must not throw
+        zombie.Lua.LuaManager.exposer = null;
+        me.zed_0xff.zombie_buddy.Exposer.addCalled = false;
+        FakeLuaExposer.exposedCount = 0;
+        Main.main(new String[0]);
+        check(me.zed_0xff.zombie_buddy.Exposer.addCalled,
+                "registration still happens when the exposer is not ready");
+        check(FakeLuaExposer.exposedCount == 0,
+                "nothing exposed immediately without a Lua engine");
+
         System.out.println(failures == 0 ? "ALL TESTS PASSED" : failures + " FAILURES");
         System.exit(failures == 0 ? 0 : 1);
     }
@@ -611,6 +637,14 @@ public class WBTest {
         File base = new File(zomboidDir, ".scratch");
         base.mkdirs();
         return Files.createTempDirectory(base.toPath(), prefix).toFile();
+    }
+
+    /** Stand-in for Kahlua's LuaJavaClassExposer in the exposure test. */
+    public static class FakeLuaExposer {
+        static int exposedCount = 0;
+        public void exposeGlobalFunctions(Object instance) {
+            exposedCount++;
+        }
     }
 
     /**
