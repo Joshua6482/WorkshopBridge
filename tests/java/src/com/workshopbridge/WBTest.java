@@ -1152,11 +1152,19 @@ public class WBTest {
         // ---- 16. wbInvalidateModCaches resets the game mod caches ----
         zombie.ZomboidFileSystem.resetModFoldersCalled = false;
         zombie.gameStates.ChooseGameInfo.resetCalled = false;
+        // stale per-dir Mod objects (with their cached isAvailable() result)
+        // are the red-X bug: they must go too, like the game's own update()
+        zombie.ZomboidFileSystem.instance.modDirToMod.put("C:/fake/ModDir", new Object());
+        zombie.ZomboidFileSystem.modIdToDir.put("FakeModX", "C:/fake/ModDir");
         SteamCmdApi.wbInvalidateModCaches();
         check(zombie.ZomboidFileSystem.resetModFoldersCalled,
                 "wbInvalidateModCaches resets the mod folder scan");
         check(zombie.gameStates.ChooseGameInfo.resetCalled,
                 "wbInvalidateModCaches resets the mod info cache");
+        check(zombie.ZomboidFileSystem.instance.modDirToMod.isEmpty(),
+                "wbInvalidateModCaches clears the per-dir Mod cache");
+        check(!zombie.ZomboidFileSystem.modIdToDir.containsKey("FakeModX"),
+                "wbInvalidateModCaches clears the mod id -> dir cache");
 
         // ---- 17. Main.main exposes the wb* Lua globals on cold boot ----
         // (ZB's automatic @LuaMethod discovery runs in its afterExposeAll

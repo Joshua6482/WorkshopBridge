@@ -1,5 +1,8 @@
 package com.workshopbridge;
 
+import java.lang.reflect.Field;
+import java.util.Map;
+
 import se.krka.kahlua.integration.annotations.LuaMethod;
 
 /**
@@ -163,7 +166,14 @@ public final class SteamCmdApi {
      * parsed mod.infos by mod id; {@code reloadMods()} alone rebuilds the menu
      * model from those stale caches, and the game's own file watcher never
      * notices brand-new mod folders (its isModFile gate only matches paths
-     * under already-cached mod dirs). This mirrors what the game's own
+     * under already-cached mod dirs).
+     *
+     * resetModFolders() + ChooseGameInfo.Reset() alone are NOT enough: the
+     * game also caches modIdToDir/modDirToMod on ZomboidFileSystem, and each
+     * Mod caches isAvailable() in its availableDone flag. Without clearing
+     * those, a mod whose missing requirement just got installed keeps its
+     * red X until restart (the menu rebuild reuses the stale Mod object via
+     * getModInfoForDir). This mirrors what the game's own
      * ZomboidFileSystem.update() does when its watcher fires. Call it on the
      * game thread (Lua job-completion handlers qualify), right before
      * {@code ms:reloadMods()}.
@@ -171,11 +181,34 @@ public final class SteamCmdApi {
     @LuaMethod(name = "wbInvalidateModCaches", global = true)
     public static void wbInvalidateModCaches() {
         try {
+            clearModCacheMap("modIdToDir");
+            clearModCacheMap("modDirToMod");
             zombie.ZomboidFileSystem.instance.resetModFolders();
             zombie.gameStates.ChooseGameInfo.Reset();
             System.out.println("[WorkshopBridge] invalidated game mod caches");
         } catch (Throwable t) {
             System.out.println("[WorkshopBridge] mod cache invalidation failed: " + t);
+        }
+    }
+
+    /**
+     * Best-effort clear of a private mod-cache map on
+     * ZomboidFileSystem.instance (mirrors update()'s own refresh). Logs and
+     * continues when the field is absent (e.g. a future game build renamed
+     * it): the remaining invalidation steps still run.
+     */
+    private static void clearModCacheMap(String fieldName) {
+        try {
+            Object zfs = zombie.ZomboidFileSystem.instance;
+            Field f = zfs.getClass().getDeclaredField(fieldName);
+            f.setAccessible(true);
+            Object v = f.get(zfs);
+            if (v instanceof Map) {
+                ((Map<?, ?>) v).clear();
+            }
+        } catch (ReflectiveOperationException e) {
+            System.out.println("[WorkshopBridge] mod cache '" + fieldName
+                    + "' not cleared (" + e.getMessage() + ")");
         }
     }
 

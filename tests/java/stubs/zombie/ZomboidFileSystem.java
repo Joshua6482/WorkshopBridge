@@ -21,6 +21,9 @@ public class ZomboidFileSystem {
     }
     /** Test hook: mod id -> mod folder, backing getModDir. */
     public static final java.util.Map<String, String> modIdToDir = new java.util.HashMap<>();
+    /** Mirrors the real instance cache: mod dir -> parsed Mod object.
+     * wbInvalidateModCaches clears it (like the game's own update()). */
+    public final java.util.Map<String, Object> modDirToMod = new java.util.HashMap<>();
     /** Mirrors the real lookup: the folder the game resolves for a mod id. */
     public String getModDir(String modId) {
         return modIdToDir.get(modId);
