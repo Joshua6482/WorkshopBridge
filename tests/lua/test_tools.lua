@@ -141,11 +141,50 @@ check(refreshOpt ~= nil and refreshOpt:getValue() == true,
     "per-download refresh tickbox present, default on")
 check(WB_GetRefreshListPerDownload() == true,
     "option reads true by default")
+-- the three newer tickboxes follow the same pattern
+local depsOpt = registeredOptions:getOption("CheckDependenciesAfterDownload")
+check(depsOpt ~= nil and depsOpt:getValue() == true,
+    "dependency-check tickbox present, default on")
+check(WB_GetCheckDependenciesAfterDownload() == true,
+    "dependency option reads true by default")
+local serverOpt = registeredOptions:getOption("OfferServerModDownloads")
+check(serverOpt ~= nil and serverOpt:getValue() == true,
+    "server-download tickbox present, default on")
+check(WB_GetOfferServerModDownloads() == true,
+    "server-download option reads true by default")
+local sidecarOpt = registeredOptions:getOption("WriteSidecarStamp")
+check(sidecarOpt ~= nil and sidecarOpt:getValue() == true,
+    "sidecar tickbox present, default on")
+check(WB_GetWriteSidecarStamp() == true,
+    "sidecar option reads true by default")
+-- toggling one does not affect the others
+depsOpt:setValue(false)
+check(WB_GetCheckDependenciesAfterDownload() == false,
+    "dependency option reads false when turned off")
+check(WB_GetOfferServerModDownloads() == true
+        and WB_GetWriteSidecarStamp() == true
+        and WB_GetRefreshListPerDownload() == true,
+    "other options unaffected by the toggle")
+depsOpt:setValue(true)
+serverOpt:setValue(false)
+sidecarOpt:setValue(false)
+check(WB_GetOfferServerModDownloads() == false
+        and WB_GetWriteSidecarStamp() == false
+        and WB_GetCheckDependenciesAfterDownload() == true,
+    "each option toggles independently")
+serverOpt:setValue(true)
+sidecarOpt:setValue(true)
 -- degrades to on when the options API is absent (e.g. game changes)
 local savedPZAPI = PZAPI
 PZAPI = nil
 check(WB_GetRefreshListPerDownload() == true,
     "option defaults to on without the API")
+check(WB_GetCheckDependenciesAfterDownload() == true,
+    "dependency option defaults to on without the API")
+check(WB_GetOfferServerModDownloads() == true,
+    "server-download option defaults to on without the API")
+check(WB_GetWriteSidecarStamp() == true,
+    "sidecar option defaults to on without the API")
 PZAPI = savedPZAPI
 check(WB_GetRefreshListPerDownload() == true,
     "option still reads true after API restore")

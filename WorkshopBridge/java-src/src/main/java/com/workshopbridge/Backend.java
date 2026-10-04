@@ -73,6 +73,17 @@ public final class Backend {
     }
 
     /**
+     * Options > Mods > WorkshopBridge > "Tag mod folders with Workshop info".
+     * Read live from the game's ModOptions.ini (see {@link ModOptionsIni}),
+     * so applying the option takes effect without a restart; degrades to
+     * true when the options system has nothing recorded. The option id must
+     * match OPT_SIDECAR_STAMP in WB_Options.lua.
+     */
+    public boolean isSidecarEnabled() {
+        return ModOptionsIni.getTick(zomboidDir, "WorkshopBridge", "WriteSidecarStamp", true);
+    }
+
+    /**
      * Writes the given workshop ids as one Steam Workshop URL per line to a
      * timestamped file under {@code <Zomboid>/workshopbridge-exports/}.
      * The path is fixed (no file picker): the user is told exactly where it
@@ -139,13 +150,15 @@ public final class Backend {
                         + modId + " (was recorded as folder \"" + dir.getName() + "\")");
                 return byFolder;
             }
-            ModSidecar sidecar = ModSidecar.read(dir);
-            if (sidecar != null) {
-                workshopMap.mergeSidecar(sidecar.workshopId, sidecar.modId,
-                        sidecar.timeUpdated, sidecar.lastDownloaded);
-                System.out.println("[WorkshopBridge] re-linked " + modId
-                        + " to workshop item " + sidecar.workshopId + " (sidecar stamp)");
-                return sidecar.workshopId;
+            if (isSidecarEnabled()) {
+                ModSidecar sidecar = ModSidecar.read(dir);
+                if (sidecar != null) {
+                    workshopMap.mergeSidecar(sidecar.workshopId, sidecar.modId,
+                            sidecar.timeUpdated, sidecar.lastDownloaded);
+                    System.out.println("[WorkshopBridge] re-linked " + modId
+                            + " to workshop item " + sidecar.workshopId + " (sidecar stamp)");
+                    return sidecar.workshopId;
+                }
             }
         }
         return null;

@@ -8,6 +8,7 @@
 -- workshop ID or URL, with the usual job tracking via WB_Jobs.
 require "WorkshopBridge/WB_Config"
 require "WorkshopBridge/WB_Jobs"
+require "WorkshopBridge/WB_Options"
 require "WorkshopBridge/WB_Download" -- WB_ParseWorkshopId
 
 WB_AdoptDialog = ISPanel:derive("WB_AdoptDialog")
@@ -77,7 +78,9 @@ function WB_AdoptDialog:onAdoptClicked()
                 -- rescan: the mod is now tracked, so badges/buttons update
                 WB_RefreshModList(ms)
                 -- then offer its Workshop dependencies, if any
-                WB_CheckDependencies(ms, wsid)
+                if WB_GetCheckDependenciesAfterDownload() then
+                    WB_CheckDependencies(ms, wsid)
+                end
             end
         end,
     })

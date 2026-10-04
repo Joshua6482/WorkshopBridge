@@ -984,13 +984,13 @@ public class WBTest {
         writeFile(new File(itemV1, "common/mod.info"), "id=ReMod\n");
         writeFile(new File(itemV1, "old.txt"), "v1");
         ModInstaller.install(new File(scratch, "itemV1"), modsDir, stageDir,
-                "424240", 5555L, quiet);
+                "424240", 5555L, true, quiet);
         check(new File(modsDir, "ReMod/old.txt").isFile(), "v1 installed");
         File itemV2 = new File(scratch, "itemV2/mods/ReMod");
         writeFile(new File(itemV2, "common/mod.info"), "id=ReMod\n");
         writeFile(new File(itemV2, "new.txt"), "v2");
         List<String> ids = ModInstaller.install(new File(scratch, "itemV2"), modsDir, stageDir,
-                "424240", 5555L, quiet);
+                "424240", 5555L, true, quiet);
         File reMod = new File(modsDir, "ReMod");
         check(new File(reMod, "new.txt").isFile() && !new File(reMod, "old.txt").exists(),
                 "reinstall clean-replaces (stale files gone)");
@@ -1264,7 +1264,7 @@ public class WBTest {
         File itemV3 = new File(scratch, "itemV3/mods/NoStampMod");
         writeFile(new File(itemV3, "common/mod.info"), "id=NoStampMod\n");
         ModInstaller.install(new File(scratch, "itemV3"), modsDir, stageDir,
-                "", 0L, quiet);
+                "", 0L, true, quiet);
         check(!new File(modsDir, "NoStampMod/workshopbridge.json").exists(),
                 "blank workshop id skips the stamp");
 
@@ -1302,6 +1302,60 @@ public class WBTest {
         Files.move(outside.toPath(), archived.toPath());
         check("424242".equals(backend.getWorkshopId("SidecarMod")),
                 "moved-back mod re-links from its sidecar");
+
+        // ---- 21. mod options: ini parsing + sidecar gate ----
+        // unit-level: parse the vanilla tickbox lines off a scratch dir
+        // (the game keeps ModOptions.ini in <Zomboid>/Lua/)
+        File iniScratch = scratchDir(zomboidDir, "wb-ini");
+        File iniLuaDir = new File(iniScratch, "Lua");
+        iniLuaDir.mkdirs();
+        File iniFile = new File(iniLuaDir, "ModOptions.ini");
+        check(ModOptionsIni.getTick(iniScratch, "WorkshopBridge", "WriteSidecarStamp", true),
+                "ini: missing file -> default");
+        Files.writeString(iniFile.toPath(),
+                "tickbox|WorkshopBridge|WriteSidecarStamp|false\r\n"
+                        + "tickbox|WorkshopBridge|OtherOption|true\r\n"
+                        + "tickbox|OtherMod|WriteSidecarStamp|true\r\n"
+                        + "slider|WorkshopBridge|WriteSidecarStamp|3\r\n"
+                        + "tickbox|WorkshopBridge|WriteSidecarStamp|true\r\n"
+                        + "tickbox|WorkshopBridge|Broken|yes\r\n"
+                        + "tickbox|WorkshopBridge\r\n"
+                        + "not a valid line\r\n",
+                StandardCharsets.UTF_8);
+        check(ModOptionsIni.getTick(iniScratch, "WorkshopBridge", "WriteSidecarStamp", false),
+                "ini: last matching tickbox wins (CRLF tolerated)");
+        check(ModOptionsIni.getTick(iniScratch, "WorkshopBridge", "OtherOption", false),
+                "ini: other options read independently");
+        check(ModOptionsIni.getTick(iniScratch, "WorkshopBridge", "NoSuchOption", true),
+                "ini: missing option -> default");
+        check(ModOptionsIni.getTick(iniScratch, "WorkshopBridge", "Broken", true),
+                "ini: unreadable value -> default");
+        // the backend flag reads the game's ModOptions.ini live
+        File luaDir = new File(zomboidDir, "Lua");
+        luaDir.mkdirs();
+        File modOpts = new File(luaDir, "ModOptions.ini");
+        check(backend.isSidecarEnabled(), "sidecar defaults on without ModOptions.ini");
+        Files.writeString(modOpts.toPath(),
+                "tickbox|WorkshopBridge|WriteSidecarStamp|false\r\n", StandardCharsets.UTF_8);
+        check(!backend.isSidecarEnabled(), "sidecar option off is honored");
+        File itemV4 = new File(scratch, "itemV4/mods/GatedMod");
+        writeFile(new File(itemV4, "common/mod.info"), "id=GatedMod\n");
+        ModInstaller.install(new File(scratch, "itemV4"), modsDir, stageDir,
+                "434345", 1000L, backend.isSidecarEnabled(), quiet);
+        check(!new File(modsDir, "GatedMod/workshopbridge.json").exists(),
+                "no stamp written when option off");
+        File gatedRe = new File(backend.modsDir(), "GatedRe");
+        writeFile(new File(gatedRe, "common/mod.info"), "id=GatedRe\n");
+        ModSidecar.write(gatedRe, "434346", "GatedRe", 1000L);
+        check(backend.getWorkshopId("GatedRe") == null,
+                "no re-link when option off");
+        Files.writeString(modOpts.toPath(),
+                "tickbox|WorkshopBridge|WriteSidecarStamp|true\r\n", StandardCharsets.UTF_8);
+        check(backend.isSidecarEnabled(), "sidecar option on is honored");
+        check("434346".equals(backend.getWorkshopId("GatedRe")),
+                "re-link works when option on");
+        Files.deleteIfExists(modOpts.toPath());
+        check(backend.isSidecarEnabled(), "sidecar back to default after cleanup");
 
         System.out.println(failures == 0 ? "ALL TESTS PASSED" : failures + " FAILURES");
         System.exit(failures == 0 ? 0 : 1);

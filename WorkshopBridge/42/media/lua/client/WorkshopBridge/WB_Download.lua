@@ -6,6 +6,7 @@
 -- taking a workshop ID or URL, and the usual job tracking via WB_Jobs.
 require "WorkshopBridge/WB_Config"
 require "WorkshopBridge/WB_Jobs"
+require "WorkshopBridge/WB_Options"
 
 -- Parse a workshop id out of free-form input: a bare id ("2685600088"),
 -- "id=2685600088", or a full URL
@@ -87,7 +88,9 @@ function WB_DownloadDialog:onDownloadClicked()
                 -- rescan so the new mod shows up in the list
                 WB_RefreshModList(ms)
                 -- then offer its Workshop dependencies, if any
-                WB_CheckDependencies(ms, wsid)
+                if WB_GetCheckDependenciesAfterDownload() then
+                    WB_CheckDependencies(ms, wsid)
+                end
             end
         end,
     })
