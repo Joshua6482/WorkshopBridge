@@ -484,6 +484,24 @@ public class WBTest {
                 s -> {});
         check(new File(exe).isFile() && new File(exe).canExecute(), "installArchive extracts tar.gz", exe);
 
+        // ---- 11b. tar.gz with a GNU long filename (>100 chars -> @LongLink) ----
+        File longDir = scratchDir(zomboidDir, "wb-longname");
+        File longContent = new File(longDir, "content");
+        longContent.mkdirs();
+        Files.writeString(new File(longContent, "steamcmd.sh").toPath(), "#!/bin/sh\necho hi\n");
+        String longFileName = "a".repeat(120) + ".txt";
+        Files.writeString(new File(longContent, longFileName).toPath(), "long-name-ok");
+        Process tarLong = new ProcessBuilder("tar", "--format=gnu", "-czf",
+                new File(longDir, "long.tar.gz").getAbsolutePath(),
+                "-C", longContent.getAbsolutePath(), "steamcmd.sh", longFileName).start();
+        check(tarLong.waitFor() == 0, "long-name tar fixture created");
+        File longOut = new File(longDir, "out");
+        sc.installArchive(new File(longDir, "long.tar.gz"), false, longOut, s -> {});
+        File extractedLong = new File(longOut, longFileName);
+        check(extractedLong.isFile()
+                && Files.readString(extractedLong.toPath()).equals("long-name-ok"),
+                "installArchive handles GNU long names");
+
         // ---- 12. 32-bit hint fires on the classic failure signatures ----
         // (pass the nixos flag explicitly: the 1-arg overload sniffs the real
         // OS, so on NixOS these take the steam-run branch instead)
