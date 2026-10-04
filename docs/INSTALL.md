@@ -2,7 +2,7 @@
 
 In this doc, "the Zomboid folder" means the game's save/cache directory: `~/Zomboid` on Linux, `%USERPROFILE%\Zomboid` on Windows. That's where saves, mods, and logs live. It is not the game install folder (the one with `ProjectZomboid.jar`).
 
-1. **Install [ZombieBuddy](https://github.com/zed-0xff/ZombieBuddy)** (one-time). WorkshopBridge's Java backend loads through it. The mod tells you in-game if it's missing.
+1. **Install [ZombieBuddy](https://github.com/zed-0xff/ZombieBuddy)** (one-time).
 2. **Copy the `WorkshopBridge` folder** from a release into the `mods` folder inside your Zomboid folder, then enable it in the Mods menu like any other mod.
 3. **steamcmd**, two options:
    - *Let the mod handle it:* on your first update, WorkshopBridge downloads Valve's official steamcmd into `Zomboid/workshop_cache/steamcmd/` automatically.
@@ -35,22 +35,19 @@ In this doc, "the Zomboid folder" means the game's save/cache directory: `~/Zomb
   `steamcmd.exe` -> Properties -> check **Unblock** -> OK, then retry.
 - **Editing `workshopbridge.properties` in Notepad:** save it via File -> Save As
   with "Save as type" set to **All files** (otherwise you get
-  `workshopbridge.properties.txt`, which the mod ignores). Plain UTF-8 is fine;
-  if Notepad saved it with a BOM the mod strips it.
+  `workshopbridge.properties.txt`, which the mod ignores). Plain UTF-8 is fine.
 - **Very long mod paths:** if an install fails and the mod lives in a deeply
   nested folder, Windows' 260-character path limit may be the cause. The error
   message says so when it looks likely; the fix is enabling long paths in
   `HKLM\SYSTEM\CurrentControlSet\Control\FileSystem\LongPathsEnabled`.
+  [Learn more here](https://learn.microsoft.com/en-us/windows/win32/fileio/maximum-file-path-limitation)
 
 ## Troubleshooting
 
 - **steamcmd fails with `posix_spawn failed, error: 13 (Permission denied)`**,
-  e.g. when the game runs inside steam-run's sandbox: the JDK's default process
-  launcher (posix_spawn) can be blocked there. Add
+  The JDK's default process launcher (posix_spawn) can be blocked. Add
   `-Djdk.lang.Process.launchMechanism=FORK` to your game's Java command line
-  manually (the mod used to set this itself at load, but the JDK freezes the
-  mechanism on the first process launch, which happens before the mod loads,
-  so the in-code set had no effect).
+  manually.
 - **steamcmd can't execute from the game drive** (e.g. a `noexec` removable-media
   mount, or a sandboxed bind mount): the mod automatically bootstraps the
   steamcmd *binary* into `~/.cache/workshopbridge/steamcmd` (or
