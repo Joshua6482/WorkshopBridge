@@ -22,11 +22,17 @@ Runs, in order:
    per-mod button flips to "Update", result summary flash), per-mod update
    (button back to "Force update" when done), update-all, unknown jobs,
    UI timers advancing only via the fallback pump, the
-   `update()` fallback job pump, and the no-backend ZombieBuddy guidance label.
+   `update()` fallback job pump, and the no-backend hook behavior (menu buttons
+   hidden when the Java API never registered).
 3. **Download dialog** (`test_download.lua`) - the workshop-ID/URL parser plus the
    download flow: dialog open/validate/cancel, fake download job, `reloadMods`
    on completion.
-3. **Java to Lua JSON round-trip** (`test_roundtrip.lua`) - serializes real job
+4. **More tools** (`test_tools.lua`) - export enabled mods, import from text,
+   import from collection: dialog flows plus fake backend calls.
+5. **Adopt dialog** (`test_adopt.lua`) - per-mod Adopt button visibility in all
+   three panel states plus the adopt dialog flow: open, ID/URL validation,
+   cancel, adopt job, `reloadMods` on completion.
+6. **Java to Lua JSON round-trip** (`test_roundtrip.lua`) - serializes real job
    statuses with the real Java `Json` class, then decodes them with the real Lua
    decoder. Needs `javac`/`java` (JDK 17+); skipped loudly when absent.
 
@@ -62,7 +68,10 @@ Covered:
   self-healing reverse lookup (stale folder-name entry repaired via mod.info
   scan)
 - `JobManager`: check job end to end (finds updates, flags items the API no
-  longer lists), update-all job, per-mod update job, invalid ids, unknown jobs,
+  longer lists), update-all job, per-mod update job, import job (fake steamcmd
+  fails cleanly, download+install+record), adopt job (force-download, mismatch
+  fails before overwriting and names what the item holds, nothing
+  installed/recorded; match installs+records), invalid ids, unknown jobs,
   steamcmd failure surfacing as a failed job with the cause in `error`,
   download serialization (second download reports "Queued...", never overlaps),
   repeat checks coalesce onto the running job, malformed API response fails the
@@ -70,9 +79,13 @@ Covered:
   API round trip (no stale badges for just-updated items) and excludes
   in-flight downloads
 - `SteamCmd`: explicit-path override, fake download to install to map
-  recording, `installArchive` extracting a real `.tar.gz`, nonzero exit with a
-  stale cache rejected (no reinstalling the old tree as if fresh), timed-out
-  process waited on after destroy so it can't overlap the next queued job
+  recording, `installArchive` extracting a real `.tar.gz` (incl. GNU
+  `@LongLink` names), nonzero exit with a stale cache rejected (no
+  reinstalling the old tree as if fresh), timed-out process waited on after
+  destroy so it can't overlap the next queued job
+- `Backend`/`SteamCmd`: `workshopbridge.properties` auto-created with commented
+  docs on first run (existing file never overwritten); UTF-8 BOM stripped
+- `WorkshopApi.parseChildren`: collection children parsing (offline JSON)
 - `ModInstaller`: atomic swap reinstall (stale files gone, no staging
   leftovers in `mods/` or the stage dir), and all three crash-recovery cases
   (mid-swap completes forward, post-swap backup dropped, partial staging

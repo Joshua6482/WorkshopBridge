@@ -4,7 +4,7 @@ Staged plan agreed with joshua. Each phase ends with a review checkpoint - we do
 
 ## Phase 0 - Validation (done)
 
-- [x] Pure-Lua `steamcmd` execution is impossible (Kahlua has no `os.execute`/`io`, Java interop is whitelist-only, no sockets, sandboxed file I/O). See `docs/RESEARCH.md`.
+- [x] Pure-Lua `steamcmd` execution is impossible (Kahlua has no `os.execute`/`io`, Java interop is whitelist-only, no sockets, sandboxed file I/O).
 - [x] ZombieBuddy validated as the Java→Lua bridge (B42-only, `@Exposer.LuaClass` / `@LuaMethod(global=true)`).
 - [x] steamcmd anonymous workshop downloads work for PZ app ID 108600; install paths and mod-folder layout confirmed.
 - [x] Prior art reviewed: `zomboid-mod-downloader`, `pz_launcher`, `pzmm`.
@@ -12,7 +12,7 @@ Staged plan agreed with joshua. Each phase ends with a review checkpoint - we do
 ## Phase 1 - Skeleton + joint review (done)
 
 - [x] Repo structure, docs, Lua stubs, Java stubs. Reviewed in parallel with Phase 2 kickoff.
-- [x] Open items from research resolved via game decompile (see `docs/RESEARCH.md` §7).
+- [x] Open items from research resolved via game decompile.
 
 ## Phase 2 - Lua UI (done, verified in-game Oct 2026)
 
@@ -31,9 +31,9 @@ Staged plan agreed with joshua. Each phase ends with a review checkpoint - we do
 - [x] Live-session hardening: noexec/sandbox binary fallback dir, single-flight bootstrap, validation-timeout leniency (first-run self-update), ANSI stripping, sticky error panel, staging outside `mods/` (game's file watcher tripped over backup dirs). (The FORK launch-mechanism default tried here was removed Oct 2026: the JDK freezes the mechanism on the first process launch, before the mod loads, so it had no effect; the manual `-D` flag is documented in docs/INSTALL.md instead.)
 - [x] Download-new-mod UI (Lua): Download button + ID/URL dialog; Java side needed no changes.
 
-Moved to Phase 4 (hardening, not blockers): anonymous-login rejection -> account-login fallback (interactive, never store credentials); Steam Guard UX; job cancellation. Done Oct 2026: malformed Steam API JSON now fails the check (`IOException`) instead of looking like an empty/deleted result; failed steamcmd can no longer install a stale cache (exit code enforced); timed-out steamcmd is waited on before the next serialized job starts; repeat check clicks coalesce onto the running job; per-update timestamp falls back to the previously recorded one instead of the wall clock on API failure; multi-mod workshop items tracked per item, not per mod (check emits one entry per outdated item - "1 update available" / "Update all (1)" instead of "5 mods need update" - and a per-mod update clears the flag for all sibling mods of the item plus the Update-all count); test-only fixes Oct 2026: `WorkshopApi` now reads the `steamApiUrl` override per call instead of freezing it at class-load (the fixture test class-loaded it first, so joshua's "stubbed" checks were secretly hitting the real Steam API - invisible here because the live tests skip without Java sockets); 32-bit-hint tests pass the NixOS flag explicitly instead of sniffing the real OS. Windows audit Oct 2026 (`docs/WINDOWS_AUDIT.md`): no P0 code breakage in the default flow (steamcmd.zip bootstrap verified); P1 fixes done - Windows Defender/SmartScreen branch for the steamcmd failure hint, UTF-8 BOM stripped from `workshopbridge.properties` (and `mod.info` id matching), `isExecDenied` recognizes Windows error=5/193, fallback binary dir prefers `%LOCALAPPDATA%` on Windows, moves/deletes retry with backoff against AV holds, explicit UTF-8 for mod.info, steamcmd output decoded with the platform charset on Windows, FORK launch flag skipped on Windows, long-path hint on very long install paths; README gained a Windows troubleshooting section, TESTING.md notes WSL2 for the Java suite on Windows. Still open: verbatim Windows-GOG ZombieBuddy install steps for the buddy doc-test (P0-2), and confirming the buddy is on GOG not Steam (P0-1).
+Moved to Phase 4 (hardening, not blockers): anonymous-login rejection -> account-login fallback (interactive, never store credentials); Steam Guard UX; job cancellation. Done Oct 2026: malformed Steam API JSON now fails the check (`IOException`) instead of looking like an empty/deleted result; failed steamcmd can no longer install a stale cache (exit code enforced); timed-out steamcmd is waited on before the next serialized job starts; repeat check clicks coalesce onto the running job; per-update timestamp falls back to the previously recorded one instead of the wall clock on API failure; multi-mod workshop items tracked per item, not per mod (check emits one entry per outdated item - "1 update available" / "Update all (1)" instead of "5 mods need update" - and a per-mod update clears the flag for all sibling mods of the item plus the Update-all count); test-only fixes Oct 2026: `WorkshopApi` now reads the `steamApiUrl` override per call instead of freezing it at class-load (the fixture test class-loaded it first, so joshua's "stubbed" checks were secretly hitting the real Steam API - invisible here because the live tests skip without Java sockets); 32-bit-hint tests pass the NixOS flag explicitly instead of sniffing the real OS. Windows audit Oct 2026 (`docs/WINDOWS_AUDIT.md`): no P0 code breakage in the default flow (steamcmd.zip bootstrap verified); P1 fixes done - Windows Defender/SmartScreen branch for the steamcmd failure hint, UTF-8 BOM stripped from `workshopbridge.properties` (and `mod.info` id matching), `isExecDenied` recognizes Windows error=5/193, fallback binary dir prefers `%LOCALAPPDATA%` on Windows, moves/deletes retry with backoff against AV holds, explicit UTF-8 for mod.info, steamcmd output decoded with the platform charset on Windows, FORK launch flag skipped on Windows, long-path hint on very long install paths; README gained a Windows troubleshooting section, `docs/TESTING.md` notes WSL2 for the Java suite on Windows. Still open: verbatim Windows-GOG ZombieBuddy install steps for the buddy doc-test (P0-2), and confirming the buddy is on GOG not Steam (P0-1).
 
-Follow-up audit (Oct 2026), all addressed: check re-reads the map after its API round trip and skips in-flight downloads (no stale badges when an update lands mid-check); shared progress panel has ownership (first painter wins, no flicker; a completing job never hides a running job's status); UI timers advance only in the fallback pump (no more double-speed flashes when both pumps run); no-backend path now shows an in-game ZombieBuddy guidance label instead of a silent menu; README `steamcmd.path` example uses forward slashes (single backslashes are properties escapes) with the validation error hinting the same; README row/panel state wording corrected; RESEARCH.md steamcmd-discovery note marked superseded.
+Follow-up audit (Oct 2026), all addressed: check re-reads the map after its API round trip and skips in-flight downloads (no stale badges when an update lands mid-check); shared progress panel has ownership (first painter wins, no flicker; a completing job never hides a running job's status); UI timers advance only in the fallback pump (no more double-speed flashes when both pumps run); no-backend path now shows an in-game ZombieBuddy guidance label instead of a silent menu; README `steamcmd.path` example uses forward slashes (single backslashes are properties escapes) with the validation error hinting the same; README row/panel state wording corrected; the old steamcmd-discovery note (PATH guessing) marked superseded.
 
 ## Phase 4 - Harden + release
 
@@ -255,6 +255,11 @@ planned properly.
   (May never get done.)
 - [ ] **Auto update.** Download and install the new version itself.
   Depends on: self update check. (May never get done.)
+- [ ] **Expand posix_spawn troubleshooting.** docs/INSTALL.md's
+  `posix_spawn failed` entry is one line (add the FORK flag). Expand with
+  per-OS instructions: Windows (when/how this surfaces there, exact Java
+  flag placement for common launchers) and Linux (steam-run sandbox case,
+  plain native case, how to tell them apart from the error text).
 - [ ] **i18n: move all user-facing strings into translation-friendly files.**
   Lua side (button labels, status text, dialog text, error flashes) into a
   `WB_Strings.lua` table; Java side (`Net.friendlyMessage`, hints) into one
