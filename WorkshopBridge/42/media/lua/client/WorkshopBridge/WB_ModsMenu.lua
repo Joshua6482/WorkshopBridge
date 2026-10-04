@@ -21,6 +21,7 @@ require "WorkshopBridge/WB_Jobs"
 require "WorkshopBridge/WB_Download"
 require "WorkshopBridge/WB_Tools"
 require "WorkshopBridge/WB_Adopt"
+require "WorkshopBridge/WB_Dependencies"
 
 -- ---------- helpers ----------
 

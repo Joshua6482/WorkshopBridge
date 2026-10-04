@@ -32,6 +32,9 @@ public final class JobManager {
         volatile String error;
         // workshopIds with updates available
         volatile List<String> updates = Collections.emptyList();
+        // dependency-check results ("deps" jobs only): one map per required
+        // item, {id, title, installed}
+        volatile List<Map<String, Object>> deps = Collections.emptyList();
 
         Job(String id, String kind) {
             this.id = id;
@@ -48,6 +51,7 @@ public final class JobManager {
                 m.put("error", error);
             }
             m.put("updates", updates);
+            m.put("deps", deps);
             return Json.stringify(m);
         }
     }
@@ -119,6 +123,15 @@ public final class JobManager {
         return submitDownload("adopt", job -> runAdopt(job, workshopId, modId));
     }
 
+    /**
+     * Resolves a workshop item's required items ("dependencies") on a
+     * background thread. The job's {@code deps} status field carries one
+     * {id, title, installed} map per required item when done.
+     */
+    public String submitDependencies(String workshopId) {
+        return submit("deps", job -> runDependencies(job, workshopId));
+    }
+
     /** JSON status object, or null for unknown job ids. */
     public String statusJson(String jobId) {
         Job j = jobs.get(jobId);
@@ -147,6 +160,31 @@ public final class JobManager {
             }
         });
         return job.id;
+    }
+
+    /**
+     * Resolves a workshop item's required items. Best-effort: the resolver
+     * never throws, so this always completes (possibly with an empty list)
+     * and a failed Steam fetch can never surface as a job error here.
+     */
+    private void runDependencies(Job job, String workshopId) {
+        job.message = "Checking dependencies...";
+        job.total = 1;
+        List<WorkshopDependencies.Dep> found = WorkshopDependencies.getRequired(workshopId);
+        Set<String> installed = backend.workshopMap().snapshot().keySet();
+        List<Map<String, Object>> deps = new ArrayList<>();
+        for (WorkshopDependencies.Dep d : found) {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("id", d.id);
+            m.put("title", d.title);
+            m.put("installed", installed.contains(d.id));
+            deps.add(m);
+        }
+        job.deps = deps;
+        job.done = 1;
+        job.message = deps.isEmpty() ? "No dependencies found"
+                : deps.size() + " required item(s) found";
+        job.state = State.DONE;
     }
 
     private void runCheck(Job job) {

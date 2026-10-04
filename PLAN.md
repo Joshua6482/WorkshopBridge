@@ -5,11 +5,12 @@
 - Test on Windows: steamcmd.exe bootstrap, paths with spaces, fresh-profile first run, and a normal play session.
 - Exercise error paths: bad ID, offline, and deleted workshop item.
 - Test collection import in-game; its button remains disabled until this is verified.
+- Verify the dependency prompt in-game: download 3799732653 (depends on 3171167894), confirm the "Required Workshop items" dialog appears and Install all works.
 
 ## Open Work
 
 - **Orphaned sub-mods:** Updating a multi-mod workshop item can leave behind a folder for a mod removed from that item. If implemented, remove it only when its `mod.info` ID matches the removed ID and no other WorkshopBridge map entry claims that ID; otherwise leave the folder untouched.
-- **Mod dependencies:** Find a reliable source for required workshop items; `GetPublishedFileDetails` has no dependencies field. Example: `3799732653` depends on `3171167894`. Resolve the dependency list in Java, prompt in Lua to install all or choose items, and install each selected dependency through the normal serialized download job path.
+- **Mod dependencies:** DONE Oct 2026, pending in-game verification. Steam's Web API has no dependency field (verified live: `GetPublishedFileDetails` + `includechildren=true` returns no children for mods; children are collections-only. `IPublishedFileService/GetDetails` needs a publisher key, and `GetQueryUGCChildren` is the client-side Steamworks API, so neither is usable). Instead Java scrapes the public workshop page's `Required items` panel (`WorkshopDependencies`: transitive, cycle-safe, depth-capped, best-effort so Steam hiccups never block installs). `wbCheckDependencies` starts a background "deps" job; the job status carries a `deps` list of {id, title, installed}. After a fresh download or adopt, Lua shows a "Required Workshop items" dialog (Install all via the normal import job path, or Skip). Per-item choosing is a possible follow-up.
 - **Server-join mod download prompt:** Joining a server with missing mods opens the game's Steam Workshop prompt, which does not work for GOG players. Hook the prompt and download missing items through steamcmd, then resume the join. Find the correct hook, likely the workshop-download dialog or join-flow state; the decompiled `ConnectToServerState` item-update path was investigated and is not suitable.
 - **Authentication UX:** After anonymous-login rejection, offer an interactive account-login fallback without storing credentials; improve Steam Guard handling and add job cancellation.
 - **posix_spawn troubleshooting:** Expand `docs/INSTALL.md` with Windows launcher guidance and Linux instructions for distinguishing the steam-run sandbox case from native launch failures.

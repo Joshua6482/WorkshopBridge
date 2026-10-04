@@ -86,6 +86,8 @@ function WB_DownloadDialog:onDownloadClicked()
                 WB_FlashMessage(ms, WB_Text.Downloaded)
                 -- rescan so the new mod shows up in the list
                 WB_RefreshModList(ms)
+                -- then offer its Workshop dependencies, if any
+                WB_CheckDependencies(ms, wsid)
             end
         end,
     })

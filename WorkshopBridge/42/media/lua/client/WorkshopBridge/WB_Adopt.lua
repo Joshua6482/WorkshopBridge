@@ -76,6 +76,8 @@ function WB_AdoptDialog:onAdoptClicked()
                 WB_FlashMessage(ms, (st and st.message) or WB_Text.Adopted)
                 -- rescan: the mod is now tracked, so badges/buttons update
                 WB_RefreshModList(ms)
+                -- then offer its Workshop dependencies, if any
+                WB_CheckDependencies(ms, wsid)
             end
         end,
     })
