@@ -405,16 +405,17 @@ end
 local function WB_AddModPanelControls(panel)
     if panel.wbControlsAdded then return end
     panel.wbControlsAdded = true
-    -- provisional placement: bottom-left of the panel (verify in-game)
+    -- stacked: update/force-update on top, open-in-workshop under it,
+    -- status label above both. block is bottom-anchored with a 10px margin.
     local w, h = 130, 25
     local x = 10
-    local y = math.max(40, panel:getHeight() - h - 10)
+    local y = math.max(40, panel:getHeight() - 2 * h - 6 - 10)
     panel.wbUpdateBtn = ISButton:new(x, y, w, h, WB_Text.ForceUpdate, panel,
         function() WB_OnModUpdate(panel) end)
     panel.wbUpdateBtn:initialise()
     panel.wbUpdateBtn:instantiate()
     panel:addChild(panel.wbUpdateBtn)
-    panel.wbWorkshopBtn = ISButton:new(x + w + 8, y, w, h, WB_Text.OpenInWorkshop, panel,
+    panel.wbWorkshopBtn = ISButton:new(x, y + h + 6, w, h, WB_Text.OpenInWorkshop, panel,
         function() WB_OnOpenWorkshop(panel) end)
     panel.wbWorkshopBtn:initialise()
     panel.wbWorkshopBtn:instantiate()
