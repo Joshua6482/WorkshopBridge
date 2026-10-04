@@ -245,12 +245,21 @@ public final class ModInstaller {
 
     /** The {@code id=} value from mod.info, falling back to the folder name. */
     static String readModId(File modDir) {
-        // B42 layouts first, then legacy flat mod.info. B42 ships versioned
-        // dirs as "42.0" (observed on real installs), keep "42" as well.
-        String[] candidates = {
-                "common/mod.info", "42.0/mod.info", "42/mod.info",
-                "41/mod.info", "40/mod.info", "mod.info"
-        };
+        // Mirror the game's own lookup (ChooseGameInfo.readModInfoAux): the
+        // version subdir first, then common/. The version dir name comes from
+        // the game's own getModVersionDirName, so 42 / 42.1 / 42.1.0 (and any
+        // future 42.x) resolve exactly like in-game: the highest version dir
+        // at or below the running game version (42.1.0 counts as 42.1). A mod
+        // shipping both 42.1/ and 42.1.0/ is genuinely ambiguous - the game
+        // itself picks by filesystem order there, and so do we.
+        // Legacy flat mod.info (B41) is deliberately unsupported: the game
+        // doesn't recognize a mod without a common/ or versioned mod.info.
+        List<String> candidates = new ArrayList<>();
+        String versionDir = gameVersionDirName(modDir);
+        if (versionDir != null && !versionDir.isEmpty()) {
+            candidates.add(versionDir + "/mod.info");
+        }
+        candidates.add("common/mod.info");
         for (String rel : candidates) {
             File f = new File(modDir, rel);
             if (!f.isFile()) {
@@ -278,6 +287,21 @@ public final class ModInstaller {
             }
         }
         return modDir.getName();
+    }
+
+    /**
+     * The version subdir name the game would pick for this mod dir
+     * ({@code ZomboidFileSystem.getModVersionDirName}), or null when the
+     * game API is unavailable. Never throws: a missing method on some
+     * future game build must not break installs, it just narrows the
+     * lookup to common/mod.info.
+     */
+    private static String gameVersionDirName(File modDir) {
+        try {
+            return zombie.ZomboidFileSystem.instance.getModVersionDirName(modDir.toPath());
+        } catch (Throwable t) {
+            return null;
+        }
     }
 
     private static void copyRecursive(Path src, Path dest) throws IOException {
