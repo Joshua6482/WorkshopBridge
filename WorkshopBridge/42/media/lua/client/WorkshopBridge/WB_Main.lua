@@ -30,10 +30,10 @@ end
 local function WB_Init()
     WB_ApiKind = WB_DetectApi()
     if not WB_ApiKind then
+        -- unreachable in normal play: our mod.info has require=ZombieBuddy,
+        -- so the game never loads us without ZB (whose own prompt covers
+        -- its javaagent setup). Kept as a console diagnostic only.
         print("[WorkshopBridge] ZombieBuddy Java API not found and DEBUG_STUB is off.")
-        print("[WorkshopBridge] Install ZombieBuddy (see README), then enable this mod.")
-        -- still hook the menu: show in-game guidance instead of silence
-        WB_HookModsMenuNoApi()
         return
     end
     WB_HookModsMenu()
