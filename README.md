@@ -4,8 +4,7 @@ Download and update Steam Workshop mods from inside Project Zomboid. Built for n
 
 A Lua UI in the Mods menu ("Check for updates", "Update all", per-mod "Update", "Download") talks to a Java backend (via [ZombieBuddy](https://github.com/zed-0xff/ZombieBuddy)) that runs `steamcmd`, moves downloaded mods into place, and remembers which workshop item each mod came from.
 
-![Mods menu buttons](docs/images/menu-buttons.png)
-![Download dialog](docs/images/download-dialog.png)
+![UI Overview](docs/images/UI.png)
 
 ## Recommended Mods
 
