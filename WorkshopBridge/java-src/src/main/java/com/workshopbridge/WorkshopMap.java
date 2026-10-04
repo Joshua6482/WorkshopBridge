@@ -86,6 +86,53 @@ public final class WorkshopMap {
     }
 
     /**
+     * Re-links a mod from its {@link ModSidecar} stamp: adds the mod id to
+     * the entry, creating the entry from the stamp's timestamps when the
+     * workshop id is absent. An existing entry keeps its own timestamps
+     * (they may be newer than the stamp's). No-op when the mod id is
+     * already recorded. Atomic save, like every other mutation.
+     */
+    public synchronized void mergeSidecar(String workshopId, String modId,
+            long timeUpdated, long lastDownloaded) {
+        Entry e = items.get(workshopId);
+        if (e == null) {
+            List<String> ids = new ArrayList<>();
+            ids.add(modId);
+            items.put(workshopId, new Entry(ids, timeUpdated, lastDownloaded));
+        } else if (!e.modIds.contains(modId)) {
+            List<String> ids = new ArrayList<>(e.modIds);
+            ids.add(modId);
+            items.put(workshopId, new Entry(ids, e.timeUpdated, e.lastDownloaded));
+        } else {
+            return;
+        }
+        save();
+    }
+
+    /**
+     * Drops mod ids from an entry (their folders were deleted by hand);
+     * drops the whole entry when no mod ids remain. Timestamps of a
+     * surviving entry are kept. No-op when the entry or ids are absent.
+     * Atomic save, like every other mutation.
+     */
+    public synchronized void removeModIds(String workshopId, java.util.Collection<String> modIds) {
+        Entry e = items.get(workshopId);
+        if (e == null || modIds == null || modIds.isEmpty()) {
+            return;
+        }
+        List<String> kept = new ArrayList<>(e.modIds);
+        if (!kept.removeAll(modIds)) {
+            return;
+        }
+        if (kept.isEmpty()) {
+            items.remove(workshopId);
+        } else {
+            items.put(workshopId, new Entry(kept, e.timeUpdated, e.lastDownloaded));
+        }
+        save();
+    }
+
+    /**
      * Drops a workshop entry (mod deletion). No-op when absent.
      * Atomic save, like every other mutation.
      */

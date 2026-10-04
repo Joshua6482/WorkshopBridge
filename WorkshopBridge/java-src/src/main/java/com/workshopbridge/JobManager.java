@@ -168,6 +168,7 @@ public final class JobManager {
      * and a failed Steam fetch can never surface as a job error here.
      */
     private void runDependencies(Job job, String workshopId) {
+        reconcileMapWithModsDir();
         job.message = "Checking dependencies...";
         job.total = 1;
         List<WorkshopDependencies.Dep> found = WorkshopDependencies.getRequired(workshopId);
@@ -188,6 +189,7 @@ public final class JobManager {
     }
 
     private void runCheck(Job job) {
+        reconcileMapWithModsDir();
         Map<String, WorkshopMap.Entry> items = backend.workshopMap().snapshot();
         List<String> ids = new ArrayList<>(items.keySet());
         job.total = ids.size();
@@ -243,6 +245,7 @@ public final class JobManager {
     }
 
     private void runUpdateAll(Job job) {
+        reconcileMapWithModsDir();
         Map<String, WorkshopMap.Entry> items = backend.workshopMap().snapshot();
         List<String> ids = new ArrayList<>(items.keySet());
         job.message = "Checking for updates...";
@@ -472,6 +475,7 @@ public final class JobManager {
         List<String> modIds = ModInstaller.install(
                 itemDir, backend.modsDir(),
                 new File(backend.cacheDir(), ".install-staging"),
+                workshopId, timeUpdated,
                 line -> System.out.println("[WorkshopBridge] " + line));
         removeStaleSubMods(workshopId, prev == null ? List.of() : prev.modIds, modIds);
         backend.workshopMap().record(workshopId, modIds, timeUpdated);
@@ -549,6 +553,54 @@ public final class JobManager {
         }
         return "; " + skipped.size()
                 + " workshop item(s) skipped (update in flight - re-run the check to confirm)";
+    }
+
+    /**
+     * Drops map entries whose mods are all gone from the mods folder
+     * (deleted by hand outside the game, so the Delete button never saw
+     * them). A partially-missing entry loses just the missing mod ids.
+     * Without this, check/update-all would keep querying - and update-all
+     * would re-download - mods the user deliberately removed.
+     *
+     * Skipped for workshop ids with a download in flight: a folder briefly
+     * vanishes mid-swap during the atomic install, and the install's own
+     * record() re-establishes the entry right after. A null dir listing
+     * (I/O failure) prunes nothing, never nuke the map on a transient error.
+     *
+     * This does not fight the manual-archive workflow: a mod moved back
+     * into the mods folder re-links from its sidecar stamp on next lookup.
+     */
+    void reconcileMapWithModsDir() {
+        File[] dirs = backend.modsDir().listFiles(File::isDirectory);
+        if (dirs == null) {
+            return;
+        }
+        Set<String> present = new HashSet<>();
+        for (File dir : dirs) {
+            present.add(ModInstaller.readModId(dir));
+        }
+        Consumer<String> log = line -> System.out.println("[WorkshopBridge] " + line);
+        for (Map.Entry<String, WorkshopMap.Entry> e
+                : backend.workshopMap().snapshot().entrySet()) {
+            String wsid = e.getKey();
+            if (inFlight.contains(wsid)) {
+                continue;
+            }
+            List<String> gone = new ArrayList<>();
+            for (String modId : e.getValue().modIds) {
+                if (!present.contains(modId)) {
+                    gone.add(modId);
+                }
+            }
+            if (gone.isEmpty()) {
+                continue;
+            }
+            boolean wholeEntry = gone.size() == e.getValue().modIds.size();
+            backend.workshopMap().removeModIds(wsid, gone);
+            log.accept((wholeEntry ? "Untracked workshop item " : "Untracked sub-mod(s) ")
+                    + wsid + ": " + String.join(", ", gone)
+                    + " no longer in the mods folder");
+        }
     }
 
     private void prune() {

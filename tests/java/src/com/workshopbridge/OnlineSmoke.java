@@ -79,6 +79,7 @@ public class OnlineSmoke {
                 List<String> installed = ModInstaller.install(
                         itemDir, new File(zomboidDir, "mods"),
                         new File(zomboidDir, "workshop_cache/.install-staging"),
+                        PROBE_ID, System.currentTimeMillis() / 1000L,
                         System.out::println);
                 check(!installed.isEmpty(), "real install yields mod ids", installed);
             } catch (Exception e) {
