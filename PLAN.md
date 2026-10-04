@@ -240,3 +240,12 @@ planned properly.
   (May never get done.)
 - [ ] **Auto update.** Download and install the new version itself.
   Depends on: self update check. (May never get done.)
+- [ ] **i18n: move all user-facing strings into translation-friendly files.**
+  Lua side (button labels, status text, dialog text, error flashes) into a
+  `WB_Strings.lua` table; Java side (`Net.friendlyMessage`, hints) into one
+  strings class or a `.properties` bundle. Non-English *mod names* are a
+  non-issue today: we never parse or display mod titles - WorkshopApi only
+  reads numeric `publishedfileid`/`time_updated` from the Steam JSON (our
+  hand-rolled Json.java handles `\u` escapes incl. surrogate pairs), and
+  directory operations go through Java NIO, which is Unicode-clean.
+  Vanilla renders the mod names itself.
