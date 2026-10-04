@@ -118,8 +118,10 @@ public final class SteamCmdApi {
 
     /**
      * Opens the workshop page for an item in the system browser.
-     * Returns true if a browser process was launched. The id is validated
-     * as digits only before it goes anywhere near a command line, so the
+     * Returns true if a browser process was launched. Tries
+     * {@code java.awt.Desktop} first (the platform-sanctioned path), then
+     * falls back to OS-specific launcher commands. The id is validated as
+     * digits only before it goes anywhere near a command line, so the
      * {@code cmd /c start} path on Windows can't be injected into.
      * Process launching inherits the JVM-wide process launch mechanism
      * (see Main.main's FORK handling for the steam-run/posix_spawn issue).
@@ -129,6 +131,7 @@ public final class SteamCmdApi {
         try {
             if (workshopId == null || !workshopId.matches("[0-9]+")) return false;
             String url = "https://steamcommunity.com/sharedfiles/filedetails/?id=" + workshopId;
+            if (openWithDesktop(url)) return true;
             for (String[] cmd : browserCommands(url)) {
                 try {
                     new ProcessBuilder(cmd).start();
@@ -138,6 +141,24 @@ public final class SteamCmdApi {
             }
             System.out.println("[WorkshopBridge] could not open a browser for " + url);
             return false;
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
+    /**
+     * Opens a URL via {@code java.awt.Desktop}. Returns false (without
+     * throwing) when the desktop module is missing, headless, or BROWSE is
+     * unsupported, so the caller can fall back to launcher commands.
+     * Package-visible for tests.
+     */
+    static boolean openWithDesktop(String url) {
+        try {
+            if (!java.awt.Desktop.isDesktopSupported()) return false;
+            java.awt.Desktop desktop = java.awt.Desktop.getDesktop();
+            if (!desktop.isSupported(java.awt.Desktop.Action.BROWSE)) return false;
+            desktop.browse(new java.net.URI(url));
+            return true;
         } catch (Throwable t) {
             return false;
         }

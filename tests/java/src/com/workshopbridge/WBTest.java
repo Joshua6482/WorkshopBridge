@@ -649,6 +649,10 @@ public class WBTest {
         // real browser, so they are not exercised here)
         check(!SteamCmdApi.wbOpenWorkshopPage("1 & evil"), "non-numeric id rejected");
         check(!SteamCmdApi.wbOpenWorkshopPage(null), "null id rejected");
+        // openWithDesktop must degrade gracefully and never throw, whether
+        // the desktop module is present or not (the sandbox has no display)
+        SteamCmdApi.openWithDesktop("https://example.com/x");
+        check(true, "openWithDesktop never throws");
 
         System.out.println(failures == 0 ? "ALL TESTS PASSED" : failures + " FAILURES");
         System.exit(failures == 0 ? 0 : 1);
