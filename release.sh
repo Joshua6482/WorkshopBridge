@@ -30,6 +30,9 @@
 #
 # Env:
 #   WB_VERSION   same as --version
+#   VT_API_KEY   VirusTotal API key (free, from your VirusTotal profile);
+#                when set, the release zip is submitted for scanning
+#                automatically (otherwise it just prints the report link)
 set -euo pipefail
 cd "$(dirname "$0")"  # repo root
 
@@ -193,9 +196,30 @@ echo "  jar sha:  $JAR_SHA"
 echo "  VT link:  $VT_LINK"
 echo "  notes:    $NOTES"
 echo
-echo "If the VirusTotal link shows no report yet, upload the zip once at"
-echo "https://www.virustotal.com/gui/home/upload - afterwards the link"
-echo "above resolves to the scan for everyone."
+if [ -z "${VT_API_KEY:-}" ]; then
+    echo "If the VirusTotal link shows no report yet, upload the zip once at"
+    echo "https://www.virustotal.com/gui/home/upload - afterwards the link"
+    echo "above resolves to the scan for everyone."
+    echo "Tip: set VT_API_KEY (free VirusTotal API key) to upload automatically."
+else
+    # Submit the zip for scanning (uploading shares the file with
+    # VirusTotal, which is the point for a public release).
+    if command -v curl >/dev/null 2>&1; then
+        echo "release.sh: submitting $ZIP to VirusTotal..."
+        VT_HTTP="$(curl -sS -o /dev/null -w '%{http_code}' -X POST \
+            "https://www.virustotal.com/api/v3/files" \
+            -H "x-apikey: $VT_API_KEY" \
+            -F "file=@$ZIP")" || VT_HTTP="curl-failed"
+        if [ "$VT_HTTP" = "200" ]; then
+            echo "release.sh: VirusTotal accepted the upload; the report link above fills in shortly."
+        else
+            echo "release.sh: warning: VirusTotal upload returned HTTP $VT_HTTP;"
+            echo "  upload the zip manually at https://www.virustotal.com/gui/home/upload if needed."
+        fi
+    else
+        echo "release.sh: warning: curl not found; skipping VirusTotal upload."
+    fi
+fi
 echo
 TAG="v$VERSION"
 if [ -z "$ASSUME_YES" ] && command -v gh >/dev/null 2>&1; then
