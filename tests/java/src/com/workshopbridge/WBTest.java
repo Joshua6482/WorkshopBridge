@@ -55,6 +55,61 @@ public class WBTest {
         throw new IllegalStateException("job timed out: " + jobId);
     }
 
+    /**
+     * Builds a synthetic connection-details packet mirroring
+     * ConnectionDetails.write: Start section, TestTCP game map, optional
+     * workshop-item section, mod list (id/workshopId/name triples), then the
+     * fixed start-location ints (10745, 9412, 0) that the parser uses as its
+     * anchor. Records the mod-count offset in {@link #lastModCountOffset}
+     * for corruption tests.
+     */
+    static int lastModCountOffset = -1;
+
+    static java.nio.ByteBuffer buildJoinPacket(boolean withWorkshop,
+            java.util.List<String[]> mods) throws Exception {
+        java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
+        java.io.DataOutputStream d = new java.io.DataOutputStream(baos);
+        d.writeBoolean(false); // isCoopHost
+        d.writeInt(32); // maxPlayers
+        d.writeBoolean(false); // no host Steam info block
+        d.writeByte(1); // playerId
+        // Role.parse
+        putTestUTF(d, "role");
+        putTestUTF(d, "desc");
+        d.writeFloat(1);
+        d.writeFloat(1);
+        d.writeFloat(1);
+        d.writeFloat(1);
+        d.writeInt(0); // position
+        d.writeByte(0); // no capabilities
+        d.writeBoolean(false); // isReadOnly
+        putTestUTF(d, "TestMap"); // TestTCP game map
+        if (withWorkshop) {
+            d.writeShort(1);
+            d.writeLong(999L); // item id
+            d.writeLong(12345L); // timestamp
+        }
+        d.writeInt(mods.size());
+        lastModCountOffset = baos.size() - 4;
+        for (String[] m : mods) {
+            putTestUTF(d, m[0]);
+            putTestUTF(d, m[1]);
+            putTestUTF(d, m[2]);
+        }
+        d.writeInt(10745);
+        d.writeInt(9412);
+        d.writeInt(0);
+        d.flush();
+        return java.nio.ByteBuffer.wrap(baos.toByteArray());
+    }
+
+    /** Test mirror of ByteBufferWriter.putUTF: short length + UTF-8 bytes. */
+    static void putTestUTF(java.io.DataOutputStream d, String s) throws Exception {
+        byte[] b = s.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        d.writeShort(b.length);
+        d.write(b);
+    }
+
     public static void main(String[] args) throws Exception {
         String zomboidProp = System.getProperty("wb.test.zomboid");
         if (zomboidProp == null || zomboidProp.isEmpty()) {
@@ -181,6 +236,60 @@ public class WBTest {
                 "deps: non-numeric id -> empty, no throw");
         check(WorkshopDependencies.getRequired(null).isEmpty(),
                 "deps: null id -> empty, no throw");
+
+        // ---- 2d. server-join mod list parsing ----
+        java.util.List<String[]> twoMods = java.util.List.of(
+                new String[] { "ModA", "111", "Mod A" },
+                new String[] { "ModB", "", "Mod B" });
+        java.util.List<ServerJoinMods.Mod> sj =
+                ServerJoinMods.parse(buildJoinPacket(false, twoMods));
+        check(sj != null && sj.size() == 2 && "ModA".equals(sj.get(0).id)
+                        && "111".equals(sj.get(0).workshopId)
+                        && "Mod A".equals(sj.get(0).name)
+                        && "ModB".equals(sj.get(1).id)
+                        && "".equals(sj.get(1).workshopId),
+                "serverjoin: mods parsed without workshop section", sj);
+        java.util.List<ServerJoinMods.Mod> sjWs =
+                ServerJoinMods.parse(buildJoinPacket(true, twoMods));
+        check(sjWs != null && sjWs.size() == 2
+                        && "ModA".equals(sjWs.get(0).id)
+                        && "111".equals(sjWs.get(0).workshopId),
+                "serverjoin: mods parsed with workshop section", sjWs);
+        java.util.List<ServerJoinMods.Mod> sjEmpty =
+                ServerJoinMods.parse(buildJoinPacket(false, java.util.List.of()));
+        check(sjEmpty != null && sjEmpty.isEmpty(),
+                "serverjoin: empty mod list -> empty, not null");
+        // unicode names survive the round trip
+        java.util.List<ServerJoinMods.Mod> sjUni = ServerJoinMods.parse(
+                buildJoinPacket(false, java.util.Collections.singletonList(
+                        new String[] { "UniMod", "222", "M\u00f6d \u00dcn\u00efc\u00f6d\u00e9" })));
+        check(sjUni != null && sjUni.size() == 1
+                        && "M\u00f6d \u00dcn\u00efc\u00f6d\u00e9".equals(sjUni.get(0).name),
+                "serverjoin: unicode name decoded", sjUni);
+        // anything unrecognized degrades to null (caller falls back)
+        check(ServerJoinMods.parse(
+                        java.nio.ByteBuffer.wrap(new byte[] { 1, 2, 3, 4 })) == null,
+                "serverjoin: garbage -> null");
+        java.nio.ByteBuffer full = buildJoinPacket(false, twoMods);
+        byte[] cut = new byte[full.remaining() - 10];
+        full.get(cut);
+        check(ServerJoinMods.parse(java.nio.ByteBuffer.wrap(cut)) == null,
+                "serverjoin: truncated packet -> null");
+        java.nio.ByteBuffer badMagic = buildJoinPacket(false, twoMods);
+        badMagic.putInt(badMagic.limit() - 12, 12345); // break the anchor
+        check(ServerJoinMods.parse(badMagic) == null,
+                "serverjoin: wrong magic ints -> null");
+        java.nio.ByteBuffer hugeCount = buildJoinPacket(false, twoMods);
+        hugeCount.putInt(lastModCountOffset, Integer.MAX_VALUE); // absurd mod count
+        check(ServerJoinMods.parse(hugeCount) == null,
+                "serverjoin: absurd mod count -> null, no hang");
+        // installed annotation uses the game's own mod lookup
+        zombie.gameStates.ChooseGameInfo.availableModIds.add("ModA");
+        java.util.List<ServerJoinMods.Mod> annotated =
+                ServerJoinMods.annotateInstalled(sj);
+        check(annotated.get(0).installed && !annotated.get(1).installed,
+                "serverjoin: installed flag from game lookup");
+        zombie.gameStates.ChooseGameInfo.availableModIds.clear();
 
         // ---- 3. Backend + atomic map save ----
         Backend backend = Backend.get();

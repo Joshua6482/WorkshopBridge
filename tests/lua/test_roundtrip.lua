@@ -7,7 +7,7 @@ local f = assert(io.open(os.getenv("WB_STATUSES") or "/tmp/wb-luatest/java_statu
 local lines = {}
 for l in f:lines() do lines[#lines+1] = l end
 f:close()
-check(#lines == 4, "four statuses", #lines)
+check(#lines == 5, "five payloads", #lines)
 local r = WB_JsonDecode(lines[1])
 check(r.state == "running" and r.done == 2 and r.total == 5, "running fields")
 check(r.current == 'Downloading "Cool Mod" (id 12345) \\ path', "escapes round-trip", r.current)
@@ -22,5 +22,10 @@ check(w.state == "done" and #w.deps == 2 and w.deps[1].id == "3171167894"
     and w.deps[1].title == "that DAMN Library" and w.deps[1].installed == false
     and w.deps[2].installed == true, "deps payload round-trips", #w.deps)
 check(w.deps[2].title == 'Already "There"', "deps title with quotes", w.deps[2].title)
+local s = WB_JsonDecode(lines[5])
+check(s.steamMode == false and #s.mods == 2 and s.mods[1].id == "supermod"
+    and s.mods[1].workshopId == "111" and s.mods[1].installed == false
+    and s.mods[2].workshopId == "", "server-mods payload round-trips", #s.mods)
+check(s.mods[1].name == 'Super "Mod"', "server-mods name with quotes", s.mods[1].name)
 print(fails == 0 and "ROUND-TRIP OK" or fails .. " FAILURES")
 os.exit(fails == 0 and 0 or 1)
