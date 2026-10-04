@@ -164,8 +164,6 @@ JAR_SHA="$(sha256sum "$JAR" | cut -d' ' -f1)"
 VT_LINK="https://www.virustotal.com/gui/file/$ZIP_SHA"
 
 cat > "$NOTES" <<EOF
-# WorkshopBridge $VERSION
-
 Download and update Steam Workshop mods from inside Project Zomboid.
 Built for non-Steam (GOG) players.
 
