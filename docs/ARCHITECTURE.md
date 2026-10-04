@@ -146,7 +146,7 @@ cached pool. Waiting downloads report `"Queued..."` until they start.
 - **More tools** (not yet verified in-game) joins the same cluster.
 - **Per-row status:** wrap `ModListBox:doDrawItem` at class level and key text by `item.item`'s mod ID; the method receives a row wrapper, not `modData`. Class-level wrapping lets patches installed later (such as ModFolders on `OnMainMenuEnter`) chain regardless of load order. Rows are not widgets, so buttons would require manual hit-testing.
 - **Wrapper rule: propagate return values.** Vanilla `prerender` uses the result of `doDrawItem` to set row height, so wrappers must forward arguments and returns.
-- **Per-mod Update button/status:** `ModInfoPanel.createChildren()` runs once; `updateView(modInfo)` runs on selection. The button reads **Update** when a check flags the mod, otherwise **Force update**. **Adopt...** (not yet verified) replaces it for "Unknown workshop ID"; **Open in Workshop** appears below when an ID is known.
+- **Per-mod Update button/status:** `ModInfoPanel.createChildren()` runs once; `updateView(modInfo)` runs on selection. The button reads **Update** when a check flags the mod, otherwise **Force update**. **Adopt...** (verified in-game Oct 2026) replaces it for "Unknown workshop ID"; **Open in Workshop** appears below when an ID is known.
 - Row states (three): in our map → per-mod button (+ "Update available" badge after a check); game's `getWorkshopID()` non-empty → "Managed by Steam"; else grey "Unknown workshop ID".
 - Wrapping is idempotent per instance and re-applied by `WB_RefreshModList` after update-all, per-mod update, and download reloads.
 
