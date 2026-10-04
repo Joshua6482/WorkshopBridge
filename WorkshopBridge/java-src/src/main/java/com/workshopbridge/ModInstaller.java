@@ -87,7 +87,8 @@ public final class ModInstaller {
             return new IOException(e.getMessage()
                     + " (this path is very long - Windows' 260-char path limit may be"
                     + " the cause; enable long paths via"
-                    + " HKLM\\SYSTEM\\CurrentControlSet\\Control\\FileSystem\\LongPathsEnabled)",
+                    + " HKLM\\SYSTEM\\CurrentControlSet\\Control\\FileSystem\\LongPathsEnabled -"
+                    + " see https://learn.microsoft.com/en-us/windows/win32/fileio/maximum-file-path-limitation)",
                     e);
         }
         return e;
