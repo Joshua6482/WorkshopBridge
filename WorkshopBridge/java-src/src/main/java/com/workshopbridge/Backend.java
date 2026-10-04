@@ -73,11 +73,7 @@ public final class Backend {
     }
 
     /**
-     * PZ mod id -> workshop id, with self-healing: when the map has no entry
-     * recording {@code modId}, scan the installed mods; a folder whose
-     * mod.info id matches but which was recorded under its folder name
-     * (author typo in the folder, or a mod.info layout we didn't parse at
-     * install time) gets its entry repaired on the spot.
+     * PZ mod id -> workshop id, with some self-healing
      */
     public synchronized String getWorkshopId(String modId) {
         String wsid = workshopMap.getWorkshopId(modId);

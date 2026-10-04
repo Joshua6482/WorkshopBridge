@@ -27,3 +27,7 @@ workshop_cache/
 
 # Java test work dirs (tests/java/.test-work*/): local scratch, wiped each run
 tests/java/.test-work*/
+
+ZombieBuddy/
+
+WorkshopBridge/java-src/gradle.txt
