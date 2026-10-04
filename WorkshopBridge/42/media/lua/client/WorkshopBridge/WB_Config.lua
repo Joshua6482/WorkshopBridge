@@ -61,4 +61,10 @@ WB_Text = {
     Updating         = "Updating...",
     CheckFailed      = "Check failed",
     UpdateFailed     = "Update failed",
+    CheckingDependencies = "Checking dependencies...",
+    DependenciesTitle = "Required Workshop items",
+    DependenciesHint = "This mod needs these Workshop items to work:",
+    DependenciesMore = "...and %d more",
+    InstallAll       = "Install all",
+    Skip             = "Skip",
 }

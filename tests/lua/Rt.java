@@ -22,5 +22,17 @@ public class Rt {
         failed.put("id", "job-44"); failed.put("state", "failed");
         failed.put("error", "Couldn't reach Steam's servers - check your internet connection.");
         System.out.println(Json.stringify(failed));
+        Map<String, Object> withDeps = new LinkedHashMap<>();
+        withDeps.put("id", "job-45"); withDeps.put("state", "done");
+        withDeps.put("done", 1); withDeps.put("total", 1);
+        withDeps.put("updates", new ArrayList<>());
+        Map<String, Object> dep1 = new LinkedHashMap<>();
+        dep1.put("id", "3171167894"); dep1.put("title", "that DAMN Library");
+        dep1.put("installed", false);
+        Map<String, Object> dep2 = new LinkedHashMap<>();
+        dep2.put("id", "999"); dep2.put("title", "Already \"There\"");
+        dep2.put("installed", true);
+        withDeps.put("deps", Arrays.asList(dep1, dep2));
+        System.out.println(Json.stringify(withDeps));
     }
 }

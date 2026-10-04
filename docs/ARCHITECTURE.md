@@ -64,6 +64,10 @@ gracefully on other ZombieBuddy versions.
     done = 2, total = 5,            -- items processed (for Update all)
     message = "Downloading 123456789 (3/5)…",
     error = nil | "steamcmd not found",
+    updates = { "123", ... },       -- check jobs: workshop ids with updates
+    deps = {                        -- deps jobs only: required items
+        { id = "123", title = "Some Library", installed = false }, ...
+    },
 }
 ```
 

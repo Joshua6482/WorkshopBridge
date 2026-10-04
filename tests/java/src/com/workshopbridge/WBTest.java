@@ -116,6 +116,72 @@ public class WBTest {
         check(Net.friendlyMessage(new java.io.IOException("weird")).equals("weird"),
                 "net passthrough");
 
+        // ---- 2c. dependency ("required items") parsing ----
+        String depHtml = Files.readString(
+                new File(fixtureDir, "workshoppage-requireditems.html").toPath(),
+                StandardCharsets.UTF_8);
+        java.util.List<WorkshopDependencies.Dep> deps =
+                WorkshopDependencies.parseRequiredItems(depHtml);
+        check(deps.size() == 1 && "3171167894".equals(deps.get(0).id),
+                "deps: real page yields the required item", deps.size());
+        check("that DAMN Library".equals(deps.get(0).title),
+                "deps: title parsed", deps.get(0).title);
+        check(WorkshopDependencies.parseRequiredItems("<html>no marker here</html>").isEmpty(),
+                "deps: no RequiredItems marker -> empty");
+        check(WorkshopDependencies.parseRequiredItems(null).isEmpty(),
+                "deps: null html -> empty");
+        check(WorkshopDependencies.parseRequiredItems("").isEmpty(),
+                "deps: empty html -> empty");
+        // unrelated filedetails links elsewhere on the page must not leak in
+        String twoLinks = "<div id=\"RequiredItems\">"
+                + "<a href=\"https://steamcommunity.com/workshop/filedetails/?id=111\">"
+                + "<div class=\"requiredItem\">One &amp; Only</div></a>"
+                + "<a href=\"https://steamcommunity.com/workshop/filedetails/?id=111\">"
+                + "<div class=\"requiredItem\">One duplicate</div></a>"
+                + "<a href=\"https://steamcommunity.com/workshop/filedetails/?id=222\">"
+                + "<div class=\"requiredItem\">Two</div></a>"
+                + "</div><!-- created by --><a href=\"?id=999\">unrelated</a>";
+        java.util.List<WorkshopDependencies.Dep> two =
+                WorkshopDependencies.parseRequiredItems(twoLinks);
+        check(two.size() == 2 && "111".equals(two.get(0).id) && "222".equals(two.get(1).id),
+                "deps: order kept, duplicates dropped", two.size());
+        check("One & Only".equals(two.get(0).title), "deps: entities unescaped",
+                two.get(0).title);
+        // transitive collection: cycle-safe, depth-capped
+        java.util.Map<String, java.util.List<WorkshopDependencies.Dep>> graph =
+                new java.util.LinkedHashMap<>();
+        graph.put("1", java.util.List.of(new WorkshopDependencies.Dep("2", "B"),
+                new WorkshopDependencies.Dep("3", "C")));
+        graph.put("2", java.util.List.of(new WorkshopDependencies.Dep("3", "C"),
+                new WorkshopDependencies.Dep("1", "A"))); // cycle back to root
+        graph.put("3", java.util.List.of());
+        java.util.List<WorkshopDependencies.Dep> trans = new java.util.ArrayList<>();
+        java.util.Set<String> seen = new java.util.LinkedHashSet<>();
+        seen.add("1");
+        WorkshopDependencies.collectInto("1", 0, seen, trans,
+                id -> graph.getOrDefault(id, java.util.List.of()));
+        check(trans.size() == 2 && "2".equals(trans.get(0).id)
+                        && "3".equals(trans.get(1).id),
+                "deps: transitive, no repeats, cycle-safe", trans.size());
+        java.util.Map<String, java.util.List<WorkshopDependencies.Dep>> chain =
+                new java.util.LinkedHashMap<>();
+        chain.put("1", java.util.List.of(new WorkshopDependencies.Dep("2", "b")));
+        chain.put("2", java.util.List.of(new WorkshopDependencies.Dep("3", "c")));
+        chain.put("3", java.util.List.of(new WorkshopDependencies.Dep("4", "d")));
+        chain.put("4", java.util.List.of(new WorkshopDependencies.Dep("5", "e")));
+        java.util.List<WorkshopDependencies.Dep> capped = new java.util.ArrayList<>();
+        java.util.Set<String> seen2 = new java.util.LinkedHashSet<>();
+        seen2.add("1");
+        WorkshopDependencies.collectInto("1", 0, seen2, capped,
+                id -> chain.getOrDefault(id, java.util.List.of()));
+        check(capped.size() == 3 && "4".equals(capped.get(2).id),
+                "deps: transitive depth capped", capped.size());
+        // getRequired never throws, even for garbage input
+        check(WorkshopDependencies.getRequired("abc").isEmpty(),
+                "deps: non-numeric id -> empty, no throw");
+        check(WorkshopDependencies.getRequired(null).isEmpty(),
+                "deps: null id -> empty, no throw");
+
         // ---- 3. Backend + atomic map save ----
         Backend backend = Backend.get();
         File zomboidDir = backend.zomboidDir();
@@ -245,6 +311,14 @@ public class WBTest {
             ex.sendResponseHeaders(200, b.length);
             try (OutputStream os = ex.getResponseBody()) { os.write(b); }
         });
+        // captured real workshop page for dependency checks
+        byte[] depPage = Files.readAllBytes(
+                new File(fixtureDir, "workshoppage-requireditems.html").toPath());
+        api.createContext("/page", ex -> {
+            ex.getResponseHeaders().add("Content-Type", "text/html; charset=utf-8");
+            ex.sendResponseHeaders(200, depPage.length);
+            try (OutputStream os = ex.getResponseBody()) { os.write(depPage); }
+        });
         api.start();
         // WorkshopApi reads the steamApiUrl property on every call (deliberately
         // not cached at class-load: the fixture test above already exercised
@@ -255,6 +329,23 @@ public class WBTest {
         System.setProperty("workshopbridge.steamApiUrl",
                 "http://127.0.0.1:" + apiPort + "/");
         JobManager jobs = new JobManager(backend);
+        // ---- 4a. dependency job against a dead endpoint: best-effort, the
+        // job still completes (with an empty list), never fails. Runs
+        // everywhere, including sandboxes without socket access.
+        String savedPageUrl = System.getProperty("workshopbridge.workshopPageUrl");
+        System.setProperty("workshopbridge.workshopPageUrl", "http://127.0.0.1:1/none/");
+        String depJob = jobs.submitDependencies("3799732653");
+        Map<String, Object> depSt = awaitDone(jobs, depJob);
+        check("done".equals(depSt.get("state")), "deps job completes on dead endpoint",
+                depSt.get("state"));
+        List<Object> depList = Json.array(depSt.get("deps"));
+        check(depList != null && depList.isEmpty(),
+                "deps job yields empty list on failure, never an error", depList);
+        if (savedPageUrl != null) {
+            System.setProperty("workshopbridge.workshopPageUrl", savedPageUrl);
+        } else {
+            System.clearProperty("workshopbridge.workshopPageUrl");
+        }
         // Gate the live-HTTP checks on a plain probe of the stub server, not on
         // our code's error strings: in sandboxed environments loopback HTTP may
         // be intercepted or dead, and the failure mode varies. On a normal
@@ -266,6 +357,23 @@ public class WBTest {
             System.out.println("SKIPPED check flags deleted item (no usable loopback HTTP here)");
             System.out.println("SKIPPED live update-all HTTP test (no usable loopback HTTP here)");
         } else {
+            // ---- 4b. dependency job against the stub workshop page ----
+            System.setProperty("workshopbridge.workshopPageUrl",
+                    "http://127.0.0.1:" + apiPort + "/page");
+            String depJob2 = jobs.submitDependencies("3799732653");
+            Map<String, Object> depSt2 = awaitDone(jobs, depJob2);
+            check("done".equals(depSt2.get("state")), "deps job completes",
+                    depSt2.get("state"));
+            List<Object> deps2 = Json.array(depSt2.get("deps"));
+            check(deps2 != null && deps2.size() == 1, "deps job carries one dep", deps2);
+            Map<String, Object> dep0 = Json.object(deps2.get(0));
+            check("3171167894".equals(dep0.get("id")), "deps job dep id", dep0.get("id"));
+            check("that DAMN Library".equals(dep0.get("title")), "deps job dep title",
+                    dep0.get("title"));
+            check(Boolean.FALSE.equals(dep0.get("installed")),
+                    "deps job dep not installed", dep0.get("installed"));
+            System.clearProperty("workshopbridge.workshopPageUrl");
+
             String checkId = jobs.submitCheck();
             Map<String, Object> st = awaitDone(jobs, checkId);
             check("done".equals(st.get("state")), "check completes", st.get("state"));

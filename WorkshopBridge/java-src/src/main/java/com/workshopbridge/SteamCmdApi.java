@@ -180,8 +180,24 @@ public final class SteamCmdApi {
     }
 
     /**
+     * Starts a dependency-check job for a workshop item: resolves its
+     * "required items" (transitively) on a background thread. The job's
+     * {@code deps} status field carries one {id, title, installed} map per
+     * required item when done. Returns a job id, or null on failure.
+     */
+    @LuaMethod(name = "wbCheckDependencies", global = true)
+    public static String wbCheckDependencies(String workshopId) {
+        try {
+            if (workshopId == null || !workshopId.matches("[0-9]+")) return null;
+            return Backend.get().jobs().submitDependencies(workshopId);
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
+    /**
      * Polls a job. Returns a JSON status object
-     * ({@code state/done/total/message[/error][/updates]}), or null for
+     * ({@code state/done/total/message[/error][/updates][/deps]}), or null for
      * unknown job ids. See docs/ARCHITECTURE.md for the shape.
      */
     @LuaMethod(name = "wbGetJobStatus", global = true)
