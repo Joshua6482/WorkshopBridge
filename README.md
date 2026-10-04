@@ -7,6 +7,11 @@ A Lua UI in the Mods menu ("Check for updates", "Update all", per-mod "Update", 
 ![Mods menu buttons](docs/images/menu-buttons.png)
 ![Download dialog](docs/images/download-dialog.png)
 
+## Recommended Mods
+
+- [Mod Folders](https://steamcommunity.com/sharedfiles/filedetails/?id=3779201168)
+- [Enable Reset Lua Button](https://steamcommunity.com/sharedfiles/filedetails/?id=3487511907)
+
 ## Docs
 
 - [Installation](docs/INSTALL.md) - ZombieBuddy setup, installing the mod, steamcmd options, Windows notes, troubleshooting
