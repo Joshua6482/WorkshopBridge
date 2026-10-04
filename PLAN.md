@@ -140,7 +140,8 @@ planned properly.
   (reflective addClassWithGlobalLuaMethod + immediate exposeGlobalFunctions,
   mirroring what afterExposeAll does), degrading gracefully on ZB versions
   without those entry points. Covered by Java test section 17
-  (Exposer/LuaManager stubs). Needs joshua's cold-boot verification.
+  (Exposer/LuaManager stubs). Verified by joshua Oct 2026: cold boot now
+  exposes the wb* globals, no Lua reload needed.
 
 - [x] **Mod menu UI refresh without restart/lua reload.** Root-caused via the
   game decompile (Oct 2026): `ms:reloadMods()` rebuilds the menu model from
