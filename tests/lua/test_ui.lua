@@ -87,7 +87,7 @@ local function fakeModInfo(modId, workshopID)
     return {
         getId = function(self) return modId end,
         getWorkshopID = function(self) return workshopID or "" end,
-        modId = modId, -- row items are Lua tables with .modId
+        modId = modId, -- modData tables carry .modId (vanilla model sets data.modId)
     }
 end
 
@@ -184,15 +184,86 @@ check(WB_IsUpdateAvailable("SomeMod"), "update marked available after check")
 check(ms.wbUpdateAllBtn.title == "Update all (1)", "update-all button shows item count",
     ms.wbUpdateAllBtn.title)
 
--- row badge
+-- row badge: doDrawItem receives the listbox row wrapper { text, item=modData }
 rowsDrawn, badgesDrawn = {}, {}
-local retY = fakeList:doDrawItem(100, fakeModInfo("SomeMod", ""), false)
+local retY = fakeList:doDrawItem(100, { item = fakeModInfo("SomeMod", "") }, false)
 check(retY == 140, "wrapper propagates doDrawItem return value", retY)
 check(#rowsDrawn == 1 and #badgesDrawn == 1, "badge drawn for update-available mod")
 check(badgesDrawn[1] and badgesDrawn[1].text == WB_Text.UpdateAvailableBadge, "badge text")
 rowsDrawn, badgesDrawn = {}, {}
-fakeList:doDrawItem(120, fakeModInfo("OtherMod", ""), false)
+fakeList:doDrawItem(120, { item = fakeModInfo("OtherMod", "") }, false)
 check(#rowsDrawn == 1 and #badgesDrawn == 0, "no badge for up-to-date mod")
+
+-- ---------- ModFolders coexistence ----------
+-- folder rows carry no mod id: badge skipped, no error
+rowsDrawn, badgesDrawn = {}, {}
+local okFolder, errFolder = pcall(function()
+    return fakeList:doDrawItem(100, { item = { mfFolderRow = true, name = "My Folder" } }, false)
+end)
+check(okFolder, "folder row draws without error", errFolder)
+check(#rowsDrawn == 1 and #badgesDrawn == 0, "no badge on folder row")
+
+-- ModFolders patches ModListBox.doDrawItem at class level. If that patch
+-- lands after our instance wrap, the re-hook (as done by WB_RefreshModList)
+-- must re-sync to it instead of leaving our instance field shadowing it.
+local classDrawn = {}
+local fakeClass = {
+    doDrawItem = function(lb, y, item, alt)
+        table.insert(classDrawn, { y = y, item = item })
+        return y + 40
+    end,
+}
+local lateBadges = {}
+local lateList = setmetatable({
+    width = 600,
+    getWidth = function(self) return self.width end,
+    drawTextRight = function(self, text, x, y, ...) table.insert(lateBadges, { text = text, x = x }) end,
+}, { __index = fakeClass })
+local lateMs = setmetatable({
+    x = 0, y = 0, width = 1024, height = 768, children = {},
+    backButton = ISButton:new(880, 710, 120, 30, "Back", nil, function() end),
+    mapOrderbtn = ISButton:new(700, 710, 100, 30, "MapsOrder", nil, function() end),
+    modListPanel = { modList = lateList },
+}, { __index = UIElement })
+WB_HookInstance(lateMs)
+lateList:doDrawItem(100, { item = fakeModInfo("SomeMod", "") }, false)
+check(#classDrawn == 1, "wrapped draw chains the class-level draw")
+-- ModFolders installs its class patch late
+local mfDrawn = {}
+fakeClass.doDrawItem = function(lb, y, item, alt)
+    table.insert(mfDrawn, { y = y, item = item })
+    return y + 42
+end
+WB_HookInstance(lateMs) -- re-hook, as WB_RefreshModList does after jobs
+local retLate = lateList:doDrawItem(100, { item = fakeModInfo("SomeMod", "") }, false)
+check(retLate == 142, "re-hook re-syncs to the late class patch", retLate)
+check(#mfDrawn == 1 and #classDrawn == 1, "late patch used exactly once, old base retired")
+
+-- with ModFolders panel controls present, our badge shifts left of its icons
+getTextManager = function()
+    return { getFontHeight = function(self, font) return 14 end }
+end
+local mfBadges = {}
+local mfList = {
+    width = 600,
+    doDrawItem = function(lb, y, item, alt) return y + 40 end,
+    getWidth = function(self) return self.width end,
+    drawTextRight = function(self, text, x, y, ...) table.insert(mfBadges, { text = text, x = x }) end,
+}
+local mfMs = setmetatable({
+    x = 0, y = 0, width = 1024, height = 768, children = {},
+    backButton = ISButton:new(880, 710, 120, 30, "Back", nil, function() end),
+    mapOrderbtn = ISButton:new(700, 710, 100, 30, "MapsOrder", nil, function() end),
+    modListPanel = { modList = mfList, mfNewFolderButton = {} },
+}, { __index = UIElement })
+WB_HookInstance(mfMs)
+mfList:doDrawItem(100, { item = fakeModInfo("SomeMod", "") }, false)
+check(#mfBadges == 1, "badge drawn with ModFolders present")
+local expectedX = 600 - 10 - 3 * (14 + 6) - 16
+check(mfBadges[1] and mfBadges[1].x == expectedX,
+    "badge shifted left of ModFolders icons", mfBadges[1] and mfBadges[1].x)
+-- the throwaway hooks above stole the global wbScreen; give it back
+WB_HookInstance(ms)
 
 -- ---------- per-mod update flow ----------
 panel:updateView(fakeModInfo("SomeMod", ""))

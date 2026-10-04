@@ -300,21 +300,58 @@ local function WB_AddMenuButtons(ms)
     end
 end
 
+-- Class-level doDrawItem, bypassing our own instance wrapper. Mods like
+-- ModFolders patch ModListBox.doDrawItem at class level after (or before)
+-- we wrap the listbox instance; our instance field would then shadow their
+-- patch, so the re-hook re-syncs to whatever the class currently has.
+-- Falls back to the previously captured base (or the instance field on
+-- first wrap) when there is no class table to read, e.g. in tests.
+local function WB_ClassDoDrawItem(list)
+    local mt = getmetatable(list)
+    local classTbl = mt and mt.__index
+    if type(classTbl) == "table" and type(classTbl.doDrawItem) == "function" then
+        return classTbl.doDrawItem
+    end
+    return nil
+end
+
 local function WB_WrapRowDrawing(ms)
     local panel = ms.modListPanel
     local list = panel and panel.modList
-    if not list or list.wbRowWrapped then return end
+    if not list then return end
+    local baseDraw = WB_ClassDoDrawItem(list)
+    if not baseDraw then
+        if list.wbRowWrapped then
+            baseDraw = list.wbBaseDraw
+        else
+            baseDraw = list.doDrawItem
+        end
+    end
+    if type(baseDraw) ~= "function" then return end
+    -- already wrapped around this exact base: nothing to do
+    if list.wbRowWrapped and list.wbBaseDraw == baseDraw then return end
     list.wbRowWrapped = true
-    local _origDraw = list.doDrawItem
-    if type(_origDraw) ~= "function" then return end
+    list.wbBaseDraw = baseDraw
+    -- ModFolders adds its +/- folder icons in the row's right-hand strip;
+    -- shift our badge left of them when its panel controls are present.
+    local modFoldersPresent = panel.mfNewFolderButton ~= nil
     list.doDrawItem = function(lb, y, item, alt)
         -- vanilla prerender does arithmetic on the return value
         -- (v.height = y2 - y), so it MUST be propagated
-        local y2 = _origDraw(lb, y, item, alt)
-        local modId = item and WB_GetModId(item)
+        local y2 = baseDraw(lb, y, item, alt)
+        -- doDrawItem receives the listbox row wrapper { text, item=modData };
+        -- the mod id lives on the wrapped modData, not the wrapper itself.
+        -- (Folder rows from ModFolders have no mod id: badge skipped, no error.)
+        local data = item and item.item or nil
+        local modId = data and WB_GetModId(data)
         if modId and WB_IsUpdateAvailable(modId) then
+            local bx = lb:getWidth() - 10
+            if modFoldersPresent then
+                local buttonH = getTextManager():getFontHeight(UIFont.Small) + 6
+                bx = bx - 3 * buttonH - 16
+            end
             -- drawTextRight: right-aligned at x, no manual width measuring needed
-            lb:drawTextRight(WB_Text.UpdateAvailableBadge, lb:getWidth() - 10, y,
+            lb:drawTextRight(WB_Text.UpdateAvailableBadge, bx, y,
                 0.5, 1.0, 0.5, 1.0, UIFont.Small)
         end
         return y2

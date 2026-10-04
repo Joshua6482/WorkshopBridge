@@ -68,6 +68,26 @@ verbatim).
 - B41 support: out of scope (ZombieBuddy is B42-only). Revisit only if a B41-compatible loader emerges.
 - License choice: MIT scaffolded, not yet confirmed by joshua.
 
+## Mod compatibility notes
+
+- **ModFolders** (workshop 3779201168, v0.2.26, ~2k-line Lua; audited Oct
+  2026): no crash-level collision. It patches `ModListBox.doDrawItem` /
+  `onMouseDown` / `onSelectItem` and `ModListPanel.updateView` at class
+  level on OnFETick/OnMainMenuEnter; we wrap `list.doDrawItem` per instance
+  at Mods-menu open, chaining whatever the class currently has, so the
+  normal order chains cleanly (WB badge -> ModFolders folder rows/icons ->
+  vanilla). Two things fixed on our side from the audit: (1) the row
+  "update available" badge never drew in-game at all - the wrapper passed
+  the listbox row wrapper to `WB_GetModId` instead of `item.item`
+  (the Lua test masked it by passing modInfo directly); now unwrapped, and
+  folder rows safely yield no badge. (2) `WB_HookInstance` now re-syncs to
+  the current class-level `doDrawItem` on re-hook, so a class patch
+  landing after our instance wrap can't be shadowed by it. The badge also
+  shifts left when ModFolders' panel controls are detected, clearing its
+  +/- icons. Residual quirk (ModFolders' design, not ours): selecting a
+  folder row doesn't update the info panel, so our Update button keeps
+  showing the last-selected mod until a real mod row is picked.
+
 ## Backlog (from live testing, Oct 2026)
 
 New scope goes here, not into the phases above, until it is picked up and
@@ -193,7 +213,7 @@ planned properly.
   not reused - find the right seam (likely the workshop-download dialog or
   state in the join flow).
 
-- [ ] **"Open in Workshop" button.** Per-mod button opening the item's
+- [ ] **"Open in Workshop" button (next up).** Per-mod button opening the item's
   workshop page in the system browser. Lua can't launch browsers (Kahlua has
   no `os.execute`), so this is a Java-side `ProcessBuilder`
   (`xdg-open` / `cmd /c start` / `open`) behind a new Lua global, e.g.
