@@ -46,10 +46,11 @@ In this doc, "the Zomboid folder" means the game's save/cache directory: `~/Zomb
 
 - **steamcmd fails with `posix_spawn failed, error: 13 (Permission denied)`**,
   e.g. when the game runs inside steam-run's sandbox: the JDK's default process
-  launcher (posix_spawn) can be blocked there. The mod sets
-  `-Djdk.lang.Process.launchMechanism=FORK` itself at load when you haven't set
-  it; if downloads still fail to launch, add the flag to your game's Java
-  command line manually.
+  launcher (posix_spawn) can be blocked there. Add
+  `-Djdk.lang.Process.launchMechanism=FORK` to your game's Java command line
+  manually (the mod used to set this itself at load, but the JDK freezes the
+  mechanism on the first process launch, which happens before the mod loads,
+  so the in-code set had no effect).
 - **steamcmd can't execute from the game drive** (e.g. a `noexec` removable-media
   mount, or a sandboxed bind mount): the mod automatically bootstraps the
   steamcmd *binary* into `~/.cache/workshopbridge/steamcmd` (or

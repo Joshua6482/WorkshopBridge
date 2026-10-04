@@ -152,7 +152,7 @@ Hardening (Oct 2026, from an external audit):
 ### First run / missing pieces
 - ZombieBuddy not installed → Lua detects `wbIsAvailable() == false` (globals missing) → the Mods menu still hooks, but shows an in-game "install ZombieBuddy" guidance label instead of the Update buttons (`WB_HookModsMenuNoApi`).
 - steamcmd not found → the Java side **bootstraps it automatically** from Valve's CDN into `Zomboid/workshop_cache/steamcmd/` (with progress). No system-wide discovery: either `steamcmd.path` in `Zomboid/workshopbridge.properties` (validated by execution, always wins) or the previously bootstrapped managed copy. `wbGetSteamCmdPath()` returns nil only when neither exists yet. If the binary can't execute from the game drive (noexec/sandboxed mount), it is bootstrapped again under `~/.cache/workshopbridge/steamcmd` (or `$XDG_CACHE_HOME`) and retried there.
-- Process launching: the mod defaults the JDK to `FORK` process spawning at load (the default `posix_spawn` fails with EACCES inside steam-run's sandbox); the user's explicit `-Djdk.lang.Process.launchMechanism` always wins.
+- Process launching: the default `posix_spawn` fails with EACCES inside steam-run's sandbox; the fix is `-Djdk.lang.Process.launchMechanism=FORK` on the game's Java command line (set manually - the mod used to set it itself at load, but the JDK freezes the mechanism on the first process launch, before the mod loads, so that had no effect).
 
 ## UI placement (B42, verified in-game Oct 2026)
 

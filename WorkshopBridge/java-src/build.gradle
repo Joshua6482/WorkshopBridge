@@ -57,6 +57,20 @@ java {
     targetCompatibility = JavaVersion.VERSION_17
 }
 
+// Diagnostics.java holds dev-only probes (native dialog backends, ...).
+// Release builds exclude it: gradle -Pdiagnostics=false installJar
+// (Main.main invokes it reflectively, so the build works either way).
+def includeDiagnostics = !project.hasProperty('diagnostics') || project.property('diagnostics') != 'false'
+sourceSets {
+    main {
+        java {
+            if (!includeDiagnostics) {
+                exclude '**/Diagnostics.java'
+            }
+        }
+    }
+}
+
 jar {
     archiveBaseName = 'WorkshopBridge'
 }
