@@ -80,7 +80,9 @@ case "$STEAMID" in
     ''|*[!0-9]*)
         die "SteamID64 must be digits only, got: '$STEAMID'" ;;
 esac
-[ "${#STEAMID}" -ge 15 ] || die "SteamID64 looks too short: '$STEAMID'"
+# ZombieBuddy's verifier requires exactly 17 digits (^SteamID64:(\d{17})$);
+# anything else makes the .zbs invalid, so fail here instead of shipping one.
+[ "${#STEAMID}" -eq 17 ] || die "SteamID64 must be exactly 17 digits, got ${#STEAMID}: '$STEAMID'"
 if [ ! -f "$ID_FILE" ]; then
     printf '%s' "$STEAMID" > "$ID_FILE"
     chmod 600 "$ID_FILE"
