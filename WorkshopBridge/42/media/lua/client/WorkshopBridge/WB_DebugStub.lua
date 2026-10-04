@@ -98,6 +98,10 @@ function WB_InstallDebugStub()
         return newJob("import-collection", 8)
     end
 
+    function wbAdoptMod(workshopId, modId)
+        return newJob("adopt", 8)
+    end
+
     function wbOpenWorkshopPage(workshopId)
         return true
     end

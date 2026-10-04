@@ -16,6 +16,7 @@ require "WorkshopBridge/WB_Config"
 require "WorkshopBridge/WB_Jobs"
 require "WorkshopBridge/WB_Download"
 require "WorkshopBridge/WB_Tools"
+require "WorkshopBridge/WB_Adopt"
 
 -- ---------- helpers ----------
 
@@ -68,14 +69,17 @@ local function WB_RefreshModPanel(panel, modInfo)
     end
     if wsid then
         panel.wbUpdateBtn:setVisible(true)
+        if panel.wbAdoptBtn then panel.wbAdoptBtn:setVisible(false) end
         WB_SetLabel(panel.wbStatusLabel,
             WB_IsUpdateAvailable(modId) and WB_Text.UpdateAvailableBadge or "")
         WB_RefreshModButtonTitle(panel, modId)
     elseif gameWsid then
         panel.wbUpdateBtn:setVisible(false)
+        if panel.wbAdoptBtn then panel.wbAdoptBtn:setVisible(false) end
         WB_SetLabel(panel.wbStatusLabel, WB_Text.ManagedBySteam)
     else
         panel.wbUpdateBtn:setVisible(false)
+        if panel.wbAdoptBtn then panel.wbAdoptBtn:setVisible(true) end
         WB_SetLabel(panel.wbStatusLabel, WB_Text.UnknownWorkshopId)
     end
     -- an in-flight update (or an unretried failure) for this workshop item
@@ -193,6 +197,12 @@ local function WB_OnOpenWorkshop(panel)
     if not ok then
         print("[WorkshopBridge] couldn't open the workshop page for " .. tostring(wsid))
     end
+end
+
+local function WB_OnAdopt(panel)
+    local modId = panel.wbModId
+    if not modId then return end
+    WB_ShowAdoptDialog(wbScreen, modId)
 end
 
 local function WB_OnModUpdate(panel)
@@ -415,6 +425,12 @@ local function WB_AddModPanelControls(panel)
     panel.wbWorkshopBtn:initialise()
     panel.wbWorkshopBtn:instantiate()
     panel:addChild(panel.wbWorkshopBtn)
+    -- adopt button: same slot as the update button (they never show together)
+    panel.wbAdoptBtn = ISButton:new(x, y, w, h, WB_Text.Adopt, panel,
+        function() WB_OnAdopt(panel) end)
+    panel.wbAdoptBtn:initialise()
+    panel.wbAdoptBtn:instantiate()
+    panel:addChild(panel.wbAdoptBtn)
     panel.wbStatusLabel = ISLabel:new(x, y - 22, 20, "", 0.8, 0.8, 0.8, 1, UIFont.Small, true)
     panel.wbStatusLabel:initialise()
     panel.wbStatusLabel:instantiate()

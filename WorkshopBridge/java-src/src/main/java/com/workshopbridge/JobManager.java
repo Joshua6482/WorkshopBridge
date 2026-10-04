@@ -107,6 +107,16 @@ public final class JobManager {
         return submitDownload("import-collection", job -> runImportCollection(job, collectionId));
     }
 
+    /**
+     * Adopts a manually installed mod: downloads the workshop item fresh
+     * (so the map gets the real remote timestamp and the mod is current),
+     * verifies the item actually contains the mod BEFORE overwriting
+     * anything, then installs and records it like a normal update.
+     */
+    public String submitAdopt(String workshopId, String modId) {
+        return submitDownload("adopt", job -> runAdopt(job, workshopId, modId));
+    }
+
     /** JSON status object, or null for unknown job ids. */
     public String statusJson(String jobId) {
         Job j = jobs.get(jobId);
@@ -279,6 +289,64 @@ public final class JobManager {
         runImport(job, children);
     }
 
+    private void runAdopt(Job job, String workshopId, String modId) {
+        if (workshopId == null || !workshopId.matches("\\d+")) {
+            fail(job, new IllegalArgumentException("invalid workshop id: " + workshopId));
+            return;
+        }
+        if (modId == null || modId.isBlank()) {
+            fail(job, new IllegalArgumentException("invalid mod id"));
+            return;
+        }
+        job.total = 2;
+        job.message = "Downloading " + workshopId + "...";
+        // Best-effort timestamp: we are downloading the latest content right
+        // now, so on API failure the wall clock is the honest baseline (the
+        // next check then only flags genuinely newer uploads). Matches
+        // runUpdate's fallback.
+        long nowSec = System.currentTimeMillis() / 1000L;
+        long timeUpdated;
+        try {
+            timeUpdated = WorkshopApi.getTimeUpdated(List.of(workshopId))
+                    .getOrDefault(workshopId, nowSec);
+        } catch (Exception e) {
+            timeUpdated = nowSec;
+        }
+        final File itemDir;
+        inFlight.add(workshopId);
+        try {
+            itemDir = downloadItem(workshopId);
+        } catch (Exception ex) {
+            inFlight.remove(workshopId);
+            fail(job, ex);
+            return;
+        }
+        job.done = 1;
+        // verify BEFORE overwriting: the item must actually contain the mod
+        // being adopted. Multi-mod items pass here as long as the adopted
+        // mod is one of them; the install below then records all of them.
+        List<String> contained = ModInstaller.scanModIds(itemDir);
+        if (!contained.contains(modId)) {
+            inFlight.remove(workshopId);
+            fail(job, new IllegalArgumentException("workshop item " + workshopId
+                    + " does not contain mod '" + modId + "'; it contains: "
+                    + (contained.isEmpty() ? "(no mods found)" : String.join(", ", contained))));
+            return;
+        }
+        job.message = "Installing " + modId + "...";
+        try {
+            installDownloaded(itemDir, workshopId, timeUpdated);
+        } catch (Exception ex) {
+            fail(job, ex);
+            return;
+        } finally {
+            inFlight.remove(workshopId);
+        }
+        job.done = 2;
+        job.message = "Adopted " + modId;
+        job.state = State.DONE;
+    }
+
     private void runImport(Job job, List<String> workshopIds) {
         // clean the input: digits only, order kept, duplicates dropped
         List<String> ids = new ArrayList<>();
@@ -298,8 +366,6 @@ public final class JobManager {
             remote = WorkshopApi.getTimeUpdated(ids);
             apiOk = true;
         } catch (Exception e) {
-            // best effort: record 0 so a later check flags these as
-            // "update available" instead of wrongly considering them current
             remote = new java.util.HashMap<>();
             apiOk = false;
         }
@@ -318,7 +384,10 @@ public final class JobManager {
             }
             job.message = "Importing " + wsid + " (" + i + "/" + ids.size() + ")...";
             try {
-                downloadAndInstall(wsid, tu == null ? 0L : tu);
+                // without an API timestamp (offline), the wall clock is the
+                // honest baseline: we just downloaded the latest content
+                downloadAndInstall(wsid,
+                        tu == null ? System.currentTimeMillis() / 1000L : tu);
                 imported++;
             } catch (Exception ex) {
                 fail(job, new Exception("failed on " + wsid + ": " + ex.getMessage(), ex));
@@ -337,18 +406,25 @@ public final class JobManager {
     private void downloadAndInstall(String workshopId, long timeUpdated) throws Exception {
         inFlight.add(workshopId);
         try {
-            File itemDir = backend.steamCmd().download(
-                    workshopId, backend.cacheDir(), line -> System.out.println("[WorkshopBridge] " + line));
-            // staging lives under the workshop cache and outside mods/ itself, 
-            // where the game's file watcher would trip over the transient backup dirs
-            List<String> modIds = ModInstaller.install(
-                    itemDir, backend.modsDir(),
-                    new File(backend.cacheDir(), ".install-staging"),
-                    line -> System.out.println("[WorkshopBridge] " + line));
-            backend.workshopMap().record(workshopId, modIds, timeUpdated);
+            installDownloaded(downloadItem(workshopId), workshopId, timeUpdated);
         } finally {
             inFlight.remove(workshopId);
         }
+    }
+
+    private File downloadItem(String workshopId) throws Exception {
+        return backend.steamCmd().download(
+                workshopId, backend.cacheDir(), line -> System.out.println("[WorkshopBridge] " + line));
+    }
+
+    private void installDownloaded(File itemDir, String workshopId, long timeUpdated) throws Exception {
+        // staging lives under the workshop cache and outside mods/ itself,
+        // where the game's file watcher would trip over the transient backup dirs
+        List<String> modIds = ModInstaller.install(
+                itemDir, backend.modsDir(),
+                new File(backend.cacheDir(), ".install-staging"),
+                line -> System.out.println("[WorkshopBridge] " + line));
+        backend.workshopMap().record(workshopId, modIds, timeUpdated);
     }
 
     private void fail(Job job, Throwable t) {

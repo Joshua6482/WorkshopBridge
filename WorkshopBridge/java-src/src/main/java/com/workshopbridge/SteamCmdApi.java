@@ -125,6 +125,20 @@ public final class SteamCmdApi {
         }
     }
 
+    /**
+     * Starts an adopt job: force-downloads the workshop item, verifies it
+     * contains {@code modId} before overwriting, then installs and records
+     * it. Returns a job id, or null on failure.
+     */
+    @LuaMethod(name = "wbAdoptMod", global = true)
+    public static String wbAdoptMod(String workshopId, String modId) {
+        try {
+            return Backend.get().jobs().submitAdopt(workshopId, modId);
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
     /** Splits a comma/newline/whitespace-separated id list, digits only,
      * order kept, duplicates dropped. */
     static java.util.List<String> parseIdList(String idsCsv) {
