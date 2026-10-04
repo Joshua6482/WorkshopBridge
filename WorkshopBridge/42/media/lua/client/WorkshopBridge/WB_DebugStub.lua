@@ -86,6 +86,10 @@ function WB_InstallDebugStub()
         return newJob("update", 8)
     end
 
+    function wbOpenWorkshopPage(workshopId)
+        return true
+    end
+
     -- no-op: the stub has no game caches to invalidate, but the real API
     -- exposes it and WB_RefreshModList calls it when present.
     function wbInvalidateModCaches()
