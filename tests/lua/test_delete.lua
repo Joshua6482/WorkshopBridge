@@ -9,6 +9,9 @@ local function check(cond, name, extra)
 end
 
 -- ---------- stub PZ environment ----------
+-- NOTE: the game's Kahlua Lua has no next(); setting it nil here keeps the
+-- test honest about which stdlib functions the mod may use.
+next = nil
 Events = {}
 Events.OnTick = { handlers = {} }
 function Events.OnTick.Add(fn) table.insert(Events.OnTick.handlers, fn) end
