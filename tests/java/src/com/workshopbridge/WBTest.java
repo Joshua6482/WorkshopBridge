@@ -156,6 +156,40 @@ public class WBTest {
         check("3768669395".equals(backend.workshopMap().getWorkshopId("TrueWeight")),
                 "entry repaired to true mod id");
 
+        // ---- 3b3. versioned mod.info dirs: game's own picker (42 / 42.1 / 42.1.0) ----
+        File verMod = new File(backend.modsDir(), "VerMod");
+        new File(verMod, "42").mkdirs();
+        new File(verMod, "42.1").mkdirs();
+        new File(verMod, "42.1.0").mkdirs();
+        writeFile(new File(verMod, "42/mod.info"), "id=Id42\n");
+        writeFile(new File(verMod, "42.1/mod.info"), "id=Id421\n");
+        writeFile(new File(verMod, "42.1.0/mod.info"), "id=Id4210\n");
+        // default test game version is 42.1.0 -> highest dir at/below it wins
+        check("Id4210".equals(ModInstaller.readModId(verMod)),
+                "readModId picks 42.1.0/mod.info on game 42.1.0");
+        // version dir beats common/ (game's read order: version first)
+        writeFile(new File(verMod, "common/mod.info"), "id=IdCommon\n");
+        check("Id4210".equals(ModInstaller.readModId(verMod)),
+                "readModId prefers version dir over common/");
+        System.setProperty("wb.test.gameVersion", "42.0.9");
+        try {
+            check("Id42".equals(ModInstaller.readModId(verMod)),
+                    "readModId picks 42/mod.info on game 42.0.9");
+        } finally {
+            System.clearProperty("wb.test.gameVersion");
+        }
+        // legacy flat mod.info at the root is ignored (B41 layout, unsupported)
+        File flatMod = new File(backend.modsDir(), "FlatMod");
+        flatMod.mkdirs();
+        writeFile(new File(flatMod, "mod.info"), "id=FlatId\n");
+        check("FlatMod".equals(ModInstaller.readModId(flatMod)),
+                "readModId ignores legacy flat mod.info");
+        // no mod.info anywhere -> folder name fallback still works
+        File bareMod = new File(backend.modsDir(), "BareMod");
+        bareMod.mkdirs();
+        check("BareMod".equals(ModInstaller.readModId(bareMod)),
+                "readModId falls back to folder name");
+
         // ---- 3c. point steamcmd at the fake (used by every job test below) ----
         File props = new File(zomboidDir, "workshopbridge.properties");
         String fakeExe = new File(System.getProperty("wb.test.fakebin"),

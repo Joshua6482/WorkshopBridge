@@ -19,4 +19,46 @@ public class ZomboidFileSystem {
     public void resetModFolders() {
         resetModFoldersCalled = true;
     }
+    /**
+     * Test port of the game's version-dir picker (ZomboidFileSystem.
+     * getModVersionDirName): highest version-like dir at or below the game
+     * version, floored at the min required version 42.0. Game version comes
+     * from the wb.test.gameVersion property (default 42.1.0). Same
+     * major*1000+minor scheme as the game's getGameVersionIntFromName:
+     * "42" -> 42000, "42.1"/"42.1.0" -> 42001, non-numeric names -> 0.
+     */
+    public String getModVersionDirName(java.nio.file.Path modDir) {
+        int gameVersion = versionInt(System.getProperty("wb.test.gameVersion", "42.1.0"));
+        String best = "42.0";
+        int bestV = 42000;
+        String[] names = modDir.toFile().list();
+        if (names != null) {
+            java.util.Arrays.sort(names); // determinism; the game uses fs order
+            for (String name : names) {
+                int v = versionInt(name);
+                if (v >= bestV && v <= gameVersion) {
+                    best = name;
+                    bestV = v;
+                }
+            }
+        }
+        return best;
+    }
+    private static int versionInt(String name) {
+        if (name == null) {
+            return 0;
+        }
+        String[] parts = name.split("\\.");
+        if (parts.length == 1) {
+            return tryParse(parts[0]) * 1000;
+        }
+        return tryParse(parts[0]) * 1000 + Math.min(tryParse(parts[1]), 999);
+    }
+    private static int tryParse(String s) {
+        try {
+            return Integer.parseInt(s);
+        } catch (NumberFormatException e) {
+            return 0;
+        }
+    }
 }
