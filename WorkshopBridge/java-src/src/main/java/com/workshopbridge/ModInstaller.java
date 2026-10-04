@@ -243,6 +243,23 @@ public final class ModInstaller {
         }
     }
 
+    /**
+     * The mod.info ids of every mod in {@code <itemDir>/mods}, without
+     * installing anything. Used by the adopt flow to verify a workshop item
+     * actually contains the expected mod before overwriting.
+     */
+    static List<String> scanModIds(File itemDir) {
+        List<String> ids = new ArrayList<>();
+        File src = new File(itemDir, "mods");
+        File[] modDirs = src.listFiles(File::isDirectory);
+        if (modDirs != null) {
+            for (File modDir : modDirs) {
+                ids.add(readModId(modDir));
+            }
+        }
+        return ids;
+    }
+
     /** The {@code id=} value from mod.info, falling back to the folder name. */
     static String readModId(File modDir) {
         // Mirror the game's own lookup (ChooseGameInfo.readModInfoAux): the

@@ -481,6 +481,35 @@ public class WBTest {
         check("failed".equals(jst.get("state")), "import of only-junk fails cleanly",
                 jst.get("state"));
 
+        // ---- 5d2. adopt: force-download, verify, install, record ----
+        String adoptId = jobs.submitAdopt("99990", "FakeMod-99990");
+        Map<String, Object> ast = awaitDone(jobs, adoptId);
+        check("done".equals(ast.get("state")), "adopt completes", ast.get("error"));
+        check(new File(backend.modsDir(), "FakeMod-99990/common/mod.info").isFile(),
+                "adopt installs the mod");
+        check(backend.workshopMap().snapshot().containsKey("99990"),
+                "adopt records workshop->mod in the map");
+        check(String.valueOf(ast.get("message")).contains("Adopted"),
+                "adopt message", ast.get("message"));
+        // id mismatch: nothing is overwritten, nothing recorded
+        String misId = jobs.submitAdopt("99989", "NotInThere");
+        Map<String, Object> mst = awaitDone(jobs, misId);
+        check("failed".equals(mst.get("state")), "adopt mismatch -> failed job",
+                mst.get("state"));
+        check(String.valueOf(mst.get("error")).contains("does not contain mod 'NotInThere'"),
+                "adopt mismatch names the expected mod", mst.get("error"));
+        check(String.valueOf(mst.get("error")).contains("FakeMod-99989"),
+                "adopt mismatch lists what the item holds", mst.get("error"));
+        check(!new File(backend.modsDir(), "FakeMod-99989").exists(),
+                "adopt mismatch installs nothing");
+        check(!backend.workshopMap().snapshot().containsKey("99989"),
+                "adopt mismatch records nothing");
+        // invalid workshop id fails cleanly
+        String adoptBad = jobs.submitAdopt("abc", "Whatever");
+        Map<String, Object> abst = awaitDone(jobs, adoptBad);
+        check("failed".equals(abst.get("state")), "adopt with bad id fails",
+                abst.get("state"));
+
         // ---- 5e. collection children parsing (offline, inline JSON) ----
         String collJson = "{\"response\":{\"result\":1,\"publishedfiledetails\":[{"
                 + "\"publishedfileid\":\"555\",\"result\":1,"
