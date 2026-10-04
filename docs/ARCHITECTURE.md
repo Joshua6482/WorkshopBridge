@@ -135,7 +135,7 @@ cached pool. Waiting downloads report `"Queued..."` until they start.
 
 ### More tools
 1. Lua: **More tools** opens three dialogs. **Export enabled mods** collects tracked or Steam-managed workshop IDs and calls `wbExportModList` synchronously. **Import from text** accepts URLs/IDs and calls `wbImportMods`. **Import from collection** (button disabled pending in-game testing) accepts a collection ID/URL; `wbImportCollection` resolves its `children` through `GetCollectionDetails` and imports them.
-2. Export writes one URL per line to `Zomboid/workshopbridge-exports/modlist-<timestamp>.txt` (millisecond stamp, `CREATE_NEW` plus a numeric fallback so back-to-back exports never overwrite each other); the path is fixed by design. Imports use the serialized download and atomic-install path, one item at a time (`Importing i/N`). On completion, caches are invalidated and the list reloaded.
+2. Export writes one URL per line to `Zomboid/workshopbridge-exports/modlist-<timestamp>.txt` (millisecond stamp, `CREATE_NEW` plus a numeric fallback so back-to-back exports never overwrite each other); the path is fixed by design. Imports use the serialized download and atomic-install path, one item at a time (`Importing i/N`). Each time a download in the batch finishes, the full `WB_RefreshModList` runs (invalidate + `reloadMods`), so landed mods appear while later ones still download; invalidating the caches alone would not do it, the visible list only rebuilds on reload.
 
 ### Adopt a mod
 1. Lua: **Adopt...** (shown for "Unknown workshop ID") opens an ID/URL dialog, parses it with `WB_ParseWorkshopId`, and calls `wbAdoptMod(workshopId, modId)`.
