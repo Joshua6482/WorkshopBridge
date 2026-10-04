@@ -52,7 +52,7 @@ other ZB versions.
 | `wbUpdateAll()` | - | jobId (checks, then downloads only outdated items) |
 | `wbInvalidateModCaches()` | - | invalidates the game's cached mod folder scan (`ZomboidFileSystem.resetModFolders()`) and parsed mod-info cache (`ChooseGameInfo.Reset()`) so a following `ms:reloadMods()` actually sees freshly downloaded/updated mods. Call on the game thread before `reloadMods()` |
 | `wbGetJobStatus(jobId)` | jobId | **JSON string** `{"state","done","total","message"[,"error"][,"updates"]}`, or null for unknown jobs. Lua decodes it with the pure-Lua `WB_Json.lua` (Kahlua's Java return marshaling is deliberately not relied upon). A done check-job carries `updates` = list of **workshopIds** with updates available (one entry per outdated item, however many mods it holds) |
-| `wbOpenWorkshopPage(workshopId)` | workshop ID | `true` if a browser process was launched. Opens `https://steamcommunity.com/sharedfiles/filedetails/?id=<id>` via `xdg-open`/`gio open` (Linux), `open` (macOS), or `cmd /c start` (Windows). The id is digits-validated before touching a command line |
+| `wbOpenWorkshopPage(workshopId)` | workshop ID | `true` if a browser process was launched. Tries `java.awt.Desktop.browse()` first, then falls back to `xdg-open`/`gio open` (Linux), `open` (macOS), or `cmd /c start` (Windows). The id is digits-validated before touching a command line |
 
 ### Job status shape (JSON string, decoded in Lua by WB_Json)
 
