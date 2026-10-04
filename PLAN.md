@@ -198,13 +198,23 @@ planned properly.
   list, Lua prompts (install-all vs pick), jobs install each dep like a
   normal download.
 
-- [ ] **Workshop Collections support (idea, unlikely).** Paste a collection
-  URL/ID, resolve the contained workshop items, download/install all of
-  them (reusing the serialized download queue). Investigate:
-  `GetPublishedFileDetails` returns a `children` array for collection
-  items. Note: authoring collections needs Steam game ownership, but
-  *consuming* them is just item IDs, so anonymous download works.
-  Only worth doing if the mod gets real users beyond us.
+- [x] **Workshop Collections support (done Oct 2026).** Import-from-collection
+  tool in the More-tools panel: paste a collection ID/URL, resolve the
+  contained workshop items via `GetPublishedFileDetails` `children`, and
+  download/install all of them through one serialized import job. (The old
+  "unlikely" note is obsolete - it shipped as part of More tools.)
+- [x] **More-tools panel (done Oct 2026).** New "More tools" button in the
+  Mods menu opening a dialog with three tools: Export enabled mods (writes
+  `workshopbridge-exports/modlist-<timestamp>.txt` of Workshop URLs under
+  the Zomboid folder - fixed path, no file picker, by design), Import from
+  text (multi-line paste box, one ID/URL per line, dupes/junk dropped), and
+  Import from collection (above). Imports run as single serialized jobs
+  reusing the atomic install path; the mod list rescans on completion.
+  Java: `wbExportModList` / `wbImportMods` / `wbImportCollection`,
+  `WorkshopApi.getCollectionChildren` (+ `parseChildren`), `Backend.exportModList`.
+  Lua: new `WB_Tools.lua` (+ `WB_GameWorkshopIdFor` promoted to `WB_Jobs.lua`
+  as a shared global). Tests: `tests/lua/test_tools.lua` (27 checks),
+  Java export/import/parseChildren/parseIdList coverage in `WBTest`.
 
 - [ ] **Server-join mod download prompt.** Joining a server with mods you
   don't have pops the game's "download missing mods" prompt, which goes
