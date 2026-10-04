@@ -198,12 +198,21 @@ check(ms.wbImportTextDialog == tdlg, "dialog stays open on junk")
 local importedCsv = nil
 local realImport = wbImportMods
 wbImportMods = function(csv) importedCsv = csv; return realImport(csv) end
+local invalidateCount = 0
+local realInvalidate = wbInvalidateModCaches
+wbInvalidateModCaches = function()
+    invalidateCount = invalidateCount + 1
+    return realInvalidate()
+end
 tdlg.entry:setText("111\nhttps://steamcommunity.com/sharedfiles/filedetails/?id=222\n111\njunk\n")
 tdlg.importBtn.onclick()
 check(ms.wbImportTextDialog == nil, "import-text dialog closes on valid input")
 check(importedCsv == "111,222", "import passes deduped ids", tostring(importedCsv))
 tick(200)
 check((ms.reloaded or 0) >= 1, "reloadMods called after text import")
+check(invalidateCount >= 2,
+    "mod caches invalidated per download, not just at the end", invalidateCount)
+wbInvalidateModCaches = realInvalidate
 
 -- cancel closes without importing
 importedCsv = nil
