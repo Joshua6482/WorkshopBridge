@@ -108,7 +108,6 @@ function WB_ImportTextDialog:buildControls()
     self.hintLabel = ISLabel:new(pad, 34, 20, WB_Text.ImportTextHint,
         0.7, 0.7, 0.7, 1, UIFont.Small, true)
     self.entry = ISTextEntryBox:new("", pad, 56, w - pad * 2, 150)
-    if self.entry.setMultipleLine then self.entry:setMultipleLine(true) end
     self.errorLabel = ISLabel:new(pad, 212, 20, "",
         1, 0.35, 0.35, 1, UIFont.Small, true)
     self.importBtn = ISButton:new(pad, 238, 140, 28, WB_Text.Import, self,
@@ -120,6 +119,10 @@ function WB_ImportTextDialog:buildControls()
         c:initialise()
         self:addChild(c)
     end
+    -- after addChild: that is what creates the entry's Java peer, and
+    -- setMultipleLine indexes into it (calling it on the fresh object
+    -- throws "attempted index: setMultipleLine of non-table: null")
+    if self.entry.setMultipleLine then self.entry:setMultipleLine(true) end
     self.importBtn:setFont(UIFont.Small)
     self.cancelBtn:setFont(UIFont.Small)
 end
@@ -278,6 +281,12 @@ function WB_ToolsDialog:buildControls()
         c:initialise()
         c:setFont(UIFont.Small)
         self:addChild(c)
+    end
+    -- collection import is untested in-game (no small test collection found
+    -- yet); disabled until it can be exercised for real. Re-enable by
+    -- deleting this block.
+    if self.importCollectionBtn.setEnable then
+        self.importCollectionBtn:setEnable(false)
     end
 end
 

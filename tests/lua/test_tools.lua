@@ -29,7 +29,12 @@ function UIElement:new(x, y, w, h, ...)
 end
 function UIElement:initialise() end
 function UIElement:instantiate() end
-function UIElement:addChild(c) table.insert(self.children, c) end
+function UIElement:addChild(c)
+    table.insert(self.children, c)
+    -- mirrors the game: addChild is what creates the child's Java peer, so
+    -- peer-touching calls (e.g. setMultipleLine) before this point throw
+    c.addedToParent = true
+end
 function UIElement:setVisible(v) self.visible = v end
 function UIElement:isVisible() return self.visible end
 function UIElement:getWidth() return self.width end
@@ -54,6 +59,7 @@ function ISButton:new(x, y, w, h, title, clicktarget, onclick, ...)
     o.title, o.clicktarget, o.onclick = title, clicktarget, onclick
     return o
 end
+function ISButton:setEnable(v) self.enable = v end
 ISTextEntryBox = UIElement:derive("ISTextEntryBox")
 function ISTextEntryBox:new(text, x, y, w, h)
     local o = UIElement.new(self, x, y, w, h)
@@ -62,7 +68,12 @@ function ISTextEntryBox:new(text, x, y, w, h)
 end
 function ISTextEntryBox:getText() return self.text end
 function ISTextEntryBox:setText(t) self.text = t end
-function ISTextEntryBox:setMultipleLine(m) self.multiLine = m end
+function ISTextEntryBox:setMultipleLine(m)
+    if not self.addedToParent then
+        error("setMultipleLine before addChild (no Java peer in-game)")
+    end
+    self.multiLine = m
+end
 
 local fakeList = {
     width = 600,
@@ -119,6 +130,8 @@ local tools = ms.wbToolsDialog
 check(tools ~= nil and tools:isVisible(), "tools dialog opens")
 check(tools.exportBtn and tools.importTextBtn and tools.importCollectionBtn,
     "tools dialog has all three tool buttons")
+check(tools.importCollectionBtn.enable == false,
+    "collection import disabled until it can be tested in-game")
 
 -- ---------- export ----------
 local function modInfo(wsid)
