@@ -134,6 +134,8 @@ function ms:reloadMods() self.reloaded = (self.reloaded or 0) + 1 end
 ModSelector.create(ms)
 check(ms.wbButtonsAdded, "menu buttons added on create")
 check(ms.wbCheckBtn and ms.wbUpdateAllBtn, "check + update-all buttons exist")
+-- wbScreen is global (not file-local): WB_Delete reads it from its own file
+check(wbScreen == ms, "hooked screen published as global wbScreen")
 check(#ms.children >= 2, "buttons added as children", #ms.children)
 check(ms.wbUpdateAllBtn.title == "Update all", "update-all initial title")
 -- progress panel is built eagerly at menu open, hidden until a job runs
