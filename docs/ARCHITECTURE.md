@@ -14,7 +14,7 @@
 ┌──────────────▼──────────────┐
 │  Java backend               │  SteamCmdApi.java (exposed)
 │  - SteamCmd: detect + spawn │  JobManager, WorkshopMap, SteamCmd
-│    steamcmd (ProcessBuilder) │
+│      (ProcessBuilder)       │
 │  - file moves Zomboid/mods/ │
 │  - update checks via        │
 │    GetPublishedFileDetails  │
@@ -34,29 +34,27 @@
 Exposed as **plain Lua globals** (`wbIsAvailable()` etc.) via
 `@LuaMethod(name = ..., global = true)`.
 
-Cold-boot note: ZombieBuddy's automatic `@LuaMethod` discovery runs in its
-`afterExposeAll` phase, which fires *before* our jar is loaded (our jar is
-found via the `loadMods` hook), so on a cold boot the wb* globals were never
-registered until a Lua reload. `Main.main` therefore registers
-`SteamCmdApi` manually (reflective `addClassWithGlobalLuaMethod` + immediate
-`exposeGlobalFunctions`, mirroring `afterExposeAll`), degrading gracefully on
-other ZB versions.
+Cold boot: ZombieBuddy's `afterExposeAll` discovery runs before our jar loads
+via the `loadMods` hook, so it misses our `wb*` globals until Lua reloads.
+`Main.main` registers `SteamCmdApi` manually using reflective
+`addClassWithGlobalLuaMethod` and `exposeGlobalFunctions`, and degrades
+gracefully on other ZombieBuddy versions.
 
 | Function | Args | Returns |
 |---|---|---|
-| `wbIsAvailable()` | - | `true` when the Java side loaded (Lua uses this to detect ZombieBuddy presence) |
+| `wbIsAvailable()` | - | `true` if Java loaded; Lua uses this to detect ZombieBuddy |
 | `wbGetSteamCmdPath()` | - | path string, or `nil` if not detected |
 | `wbGetWorkshopId(modId)` | PZ mod id (`mod.info` `id=`) | workshop ID string, or `nil` = "Unknown workshop ID" |
-| `wbCheckForUpdates()` | - | starts a job; returns jobId. A done status carries `updates` = list of **workshopIds** with updates available (one entry per outdated item, however many mods it holds) |
+| `wbCheckForUpdates()` | - | starts a job; returns jobId. On completion, `updates` lists **workshopIds** with updates (one per outdated item, regardless of contained mod count) |
 | `wbUpdateMod(workshopId)` | workshop ID | jobId |
-| `wbUpdateAll()` | - | jobId (checks, then downloads only outdated items) |
-| `wbExportModList(idsCsv)` | comma-separated workshop IDs | absolute path of the written `workshopbridge-exports/modlist-<timestamp>.txt`, or null on failure (synchronous, no job) |
-| `wbImportMods(idsCsv)` | comma-separated workshop IDs | jobId; downloads+installs each id in order ("Importing i/N") |
-| `wbImportCollection(collectionId)` | workshop collection ID | jobId; resolves the collection's children via `GetPublishedFileDetails`, then imports them like `wbImportMods` |
-| `wbAdoptMod(workshopId, modId)` | workshop ID + expected PZ mod id (`mod.info` `id=`) | jobId; force-downloads the item, verifies it contains `modId` **before** overwriting anything (fails naming what it holds otherwise), then installs+records |
-| `wbInvalidateModCaches()` | - | invalidates the game's cached mod folder scan (`ZomboidFileSystem.resetModFolders()`) and parsed mod-info cache (`ChooseGameInfo.Reset()`) so a following `ms:reloadMods()` actually sees freshly downloaded/updated mods. Call on the game thread before `reloadMods()` |
-| `wbGetJobStatus(jobId)` | jobId | **JSON string** `{"state","done","total","message"[,"error"][,"updates"]}`, or null for unknown jobs. Lua decodes it with the pure-Lua `WB_Json.lua` (Kahlua's Java return marshaling is deliberately not relied upon). A done check-job carries `updates` = list of **workshopIds** with updates available (one entry per outdated item, however many mods it holds) |
-| `wbOpenWorkshopPage(workshopId)` | workshop ID | `true` if a browser process was launched. Tries `java.awt.Desktop.browse()` first, then falls back to `xdg-open`/`gio open` (Linux), `open` (macOS), or `cmd /c start` (Windows). The id is digits-validated before touching a command line |
+| `wbUpdateAll()` | - | jobId; checks for and downloads outdated items |
+| `wbExportModList(idsCsv)` | comma-separated workshop IDs | synchronously writes `workshopbridge-exports/modlist-<timestamp>.txt`; returns its absolute path or null on failure |
+| `wbImportMods(idsCsv)` | comma-separated workshop IDs | jobId; downloads and installs IDs in order (`Importing i/N`) |
+| `wbImportCollection(collectionId)` | workshop collection ID | jobId; resolves `children` via `GetPublishedFileDetails`, then imports them as `wbImportMods` does |
+| `wbAdoptMod(workshopId, modId)` | workshop ID + expected PZ mod id (`mod.info` `id=`) | jobId; force-downloads, verifies `modId` before overwriting, then installs and records; failure names the contained IDs |
+| `wbInvalidateModCaches()` | - | clears the game's mod-folder scan (`ZomboidFileSystem.resetModFolders()`) and parsed mod-info cache (`ChooseGameInfo.Reset()`). Call on the game thread before `ms:reloadMods()` so it sees new or updated mods |
+| `wbGetJobStatus(jobId)` | jobId | **JSON string** `{"state","done","total","message"[,"error"][,"updates"]}`, or null for unknown jobs. Lua decodes it with `WB_Json.lua`; Kahlua Java-object marshaling is not relied on.
+| `wbOpenWorkshopPage(workshopId)` | workshop ID | `true` if a browser launches. Tries `java.awt.Desktop.browse()`, then `xdg-open`/`gio open` (Linux), `open` (macOS), or `cmd /c start` (Windows). Validates the ID as digits before using it in a command |
 
 ### Job status shape (JSON string, decoded in Lua by WB_Json)
 
@@ -69,40 +67,14 @@ other ZB versions.
 }
 ```
 
-Jobs run on Java background threads. Lua never blocks waiting on them: it
-polls `wbGetJobStatus(jobId)` on `Events.OnTick`, with a fallback pump
-driven by the Mods screen's per-frame `update()` (the tick doesn't reliably
-fire while a main-menu screen is open). The poll is idempotent, so both
-pumps running at once is harmless.
+Lua polls `wbGetJobStatus(jobId)` from `Events.OnTick` and the Mods screen's
+per-frame `update()` fallback, since ticks may not fire while a main-menu
+screen is open. Polling is idempotent, so both pumps can run safely.
 
-Download-bearing jobs (`wbUpdateMod`, `wbUpdateAll`, `wbImportMods`, `wbImportCollection`, `wbAdoptMod`) run **serialized** on a
-dedicated single-thread executor - concurrent steamcmd processes share one
-install dir and gain nothing. Checks stay on the cached pool. A download job
-waiting its turn reports `"Queued..."` as its message until it starts.
-
-Hardening (Oct 2026, from an external audit):
-- `SteamCmd.download()` enforces a zero exit code - a failed run can never
-  install a stale cache dir as if it were fresh; the previous download is
-  left untouched.
-- A timed-out steamcmd is waited on (bounded) after `destroyForcibly()`
-  so it can't overlap the next serialized job.
-- Malformed Steam API responses fail the check job (`IOException`) instead
-  of parsing as "no items listed" (which would misreport every mod as
-  deleted or up to date).
-- Repeat check clicks coalesce onto the already-running check job.
-- On API failure during a per-mod update, the previously recorded
-  `timeUpdated` is kept instead of the wall clock, so the next check
-  retries the comparison rather than wrongly calling it current.
-- A check re-reads the workshop map AFTER its API round trip and ignores
-  items with a download in flight, so a concurrent update can't resurrect
-  stale "update available" badges.
-- The shared progress panel has ownership: the first job to paint owns it
-  (no flicker between concurrent jobs); a completing job never hides a
-  still-running job's status, and a stuck error holds the panel against
-  concurrent jobs until the user dismisses it (a newer job's paints clear
-  it). UI timers (flash, throbber) advance only in
-  the Mods-screen fallback pump, never in `WB_PollJobs` itself, so they
-  can't run double speed when both pumps run.
+Download jobs (`wbUpdateMod`, `wbUpdateAll`, `wbImportMods`,
+`wbImportCollection`, `wbAdoptMod`) share a **single-thread executor** because
+concurrent steamcmd processes share one install directory. Checks use the
+cached pool. Waiting downloads report `"Queued..."` until they start.
 
 ## workshopbridge_map.json
 
@@ -119,71 +91,67 @@ Hardening (Oct 2026, from an external audit):
 }
 ```
 
-- Written only by the Java side, after a successful download+move. Saves are
-  atomic (write temp + rename); a corrupt file loads as empty rather than
-  throwing.
-- `modIds` parsed from each downloaded `mod.info` (`id=` line). The mod.info is
-  located the way the game locates it: via the game's own
-  `ZomboidFileSystem.getModVersionDirName` (so `42/`, `42.1/`, `42.1.0/`
-  resolve exactly as in-game), then `common/`. Legacy flat/B41 mod.info is
-  unsupported, matching the game. Falls back to the folder name when no
-  mod.info is found. A workshop item can contain multiple mods - hence the
-  list.
-- Reverse lookup (modID → workshopID) inverts the map in memory, with
-  self-healing: on a miss, installed mod folders are scanned and an entry
-  recorded under a stale folder name (author typo, or a layout we didn't
-  parse at install time) is repaired to the true mod.info id on the spot.
+- Java writes the map after a successful download and move. Saves use a
+  temporary file and atomic rename; corrupt files load as empty.
+- `modIds` come from each downloaded `mod.info` `id=` line. Java locates the
+  file using the game's `ZomboidFileSystem.getModVersionDirName` and then
+  `common/`, supporting layouts such as `42/`, `42.1/`, and `42.1.0/`. Legacy
+  flat/B41 layouts are unsupported, matching the game. If no `mod.info` is
+  found, the folder name is used. Items may contain multiple mods.
+- Reverse lookup (modID → workshopID) inverts the map in memory. On a miss,
+  installed folders are scanned; stale folder-name entries (for example,
+  from a typo or previously unparsed layout) are repaired to the `mod.info`
+  ID.
 - `timeUpdated` comes from `GetPublishedFileDetails`; compared against the workshop on update checks.
 
 ## Flows
 
 ### Check for updates
-1. Lua: **Check for updates** button → `wbCheckForUpdates()` → jobId.
-2. Java: for each mapped workshop item, `GetPublishedFileDetails` → compare `time_updated` vs stored `timeUpdated`. No downloads.
-3. Lua polls with the progress panel; on completion, rows whose workshop item has an update show an "Update available" badge, **Update all** becomes "Update all (n)" (n counts workshop items, not mods), the selected mod's panel refreshes in place, and the result summary ("Everything is up to date" / "N updates available") flashes briefly. Failures stick in the panel until clicked.
+1. Lua: **Check for updates** calls `wbCheckForUpdates()` and gets a jobId.
+2. Java: calls `GetPublishedFileDetails` for each mapped item and compares `time_updated` with stored `timeUpdated`. It does not download files.
+3. Lua polls with the progress panel. When done, updated rows get an "Update available" badge; **Update all** shows the number of outdated workshop items; the selected mod panel refreshes; and a brief result summary appears. Failures remain until clicked.
 
 ### Single mod update
-1. Lua: per-mod button → `wbGetWorkshopId(modId)` → `wbUpdateMod(workshopId)` → jobId. The button reads **Update** when a check flagged the mod, **Force update** otherwise (it always re-downloads; it never checks first).
-2. Lua polls with the progress panel; the row label tracks the job ("Updating...", "Queued...", "Up to date" / failure). On success the update-available flag clears for the whole workshop item, so sibling mods from the same item lose their badges and the **Update all** count drops too. Per-mod jobs are tracked per workshop item: a second click while one is in flight coalesces instead of queueing a duplicate, and the panel label only ever shows the job for the workshop item currently selected (selecting another mod mid-download shows its live status on return, never another job's text). Then `WB_RefreshModList` invalidates the game mod caches and reloads the list so the row shows the new mod.info (the info panel is not repainted by the reload, so the "Up to date" confirmation stays visible).
-3. Java (serialized with other downloads): download → move into `Zomboid/mods/` (replace existing) → update map → job `done`.
+1. Lua: the per-mod button gets the workshop ID with `wbGetWorkshopId(modId)` and calls `wbUpdateMod(workshopId)`. It reads **Update** after a check flags the mod, otherwise **Force update**; either action downloads again without checking first.
+2. Lua polls the progress panel and row label (`Updating...`, `Queued...`, `Up to date`, or failure). On success, the item's update flag clears for all sibling mods and the **Update all** count. Per-item jobs coalesce duplicate clicks and only update the selected item's label; switching away and back shows its live status. `WB_RefreshModList` invalidates game caches and reloads the list. The info panel is not repainted, so its completion message remains visible.
+3. Java serializes the download with other downloads, replaces the item in `Zomboid/mods/`, updates the map, and marks the job done.
 
 ### Update all
-1. Lua: **Update all** button → `wbUpdateAll()` → jobId.
-2. Java: for each mapped workshop item, `GetPublishedFileDetails` → if `time_updated > timeUpdated`, download+move+update map. Job reports `done/total`.
-3. Lua: `WB_RefreshModList` on completion: `wbInvalidateModCaches()` (the game caches the mod folder scan and parsed mod.infos, so `reloadMods()` alone would rebuild from stale data) then `ms:reloadMods()`. Without the invalidation, updated mods would keep showing old names/versions in the list.
+1. Lua: **Update all** calls `wbUpdateAll()` and gets a jobId.
+2. Java: checks each mapped item; if `time_updated > timeUpdated`, it downloads the item, installs it, and updates the map. The job reports `done/total`.
+3. Lua: on completion, `WB_RefreshModList` calls `wbInvalidateModCaches()` before `ms:reloadMods()`. The game caches mod folders and parsed `mod.info` files, so reloading without invalidation would show stale names and versions.
 
 ### Download a new mod
-1. Lua: **Download** button → dialog takes a workshop ID or URL → `WB_ParseWorkshopId` → `wbUpdateMod(workshopId)` → jobId. (The Java side treats untracked ids the same as updates: download → move into `Zomboid/mods/` → record in map.)
-2. Lua polls `wbGetJobStatus(jobId)` on tick with the progress panel; on completion `WB_RefreshModList` (invalidate + `ms:reloadMods()`) so the new mod appears, and it is tracked from then on.
+1. Lua: **Download** opens an ID/URL dialog, parses it with `WB_ParseWorkshopId`, then calls `wbUpdateMod(workshopId)`. Java downloads untracked IDs, installs them in `Zomboid/mods/`, and records them in the map.
+2. Lua polls `wbGetJobStatus(jobId)` and shows progress. On completion, `WB_RefreshModList` invalidates caches and reloads the list so the new mod appears and is tracked.
 
 ### More tools
-1. Lua: **More tools** button → three dialogs: **Export enabled mods** collects the enabled mods' workshop IDs (tracked or Steam-managed) and calls `wbExportModList` synchronously; **Import from text** pastes URLs/IDs and calls `wbImportMods`; **Import from collection** (currently hidden in the UI pending real in-game testing) pastes a collection ID/URL and calls `wbImportCollection`, which resolves the collection's `children` via `GetPublishedFileDetails` and imports each.
-2. Export writes `Zomboid/workshopbridge-exports/modlist-<timestamp>.txt` (one URL per line; fixed path, no file pickers by design). Imports reuse the serialized download path and the atomic install, one item at a time ("Importing i/N"); on completion the game caches are invalidated and the list reloaded.
+1. Lua: **More tools** opens three dialogs. **Export enabled mods** collects tracked or Steam-managed workshop IDs and calls `wbExportModList` synchronously. **Import from text** accepts URLs/IDs and calls `wbImportMods`. **Import from collection** (hidden pending in-game testing) accepts a collection ID/URL; `wbImportCollection` resolves its `children` through `GetPublishedFileDetails` and imports them.
+2. Export writes one URL per line to `Zomboid/workshopbridge-exports/modlist-<timestamp>.txt`; the path is fixed by design. Imports use the serialized download and atomic-install path, one item at a time (`Importing i/N`). On completion, caches are invalidated and the list reloaded.
 
 ### Adopt a mod
-1. Lua: per-mod **Adopt...** button (shown only for mods with "Unknown workshop ID") → dialog takes a workshop ID or URL → `WB_ParseWorkshopId` → `wbAdoptMod(workshopId, modId)` → jobId.
-2. Java (serialized with other downloads): **force-download first**, then scan the downloaded item's `mods/` tree for its mod.info ids, then compare against the selected mod's exact id. A mismatch fails the job and names what the item actually holds ("workshop item X does not contain mod 'Y'; it contains: ...") - nothing is installed, nothing is recorded. A match installs all of the item's mods (multi-mod items adopt naturally) and records every id under the workshop item. The fresh download also provides the current remote timestamp, so the adopted mod doesn't report a phantom update on the next check.
-3. Lua: same job tracking UI as updates; on completion the mod list is refreshed in place.
+1. Lua: **Adopt...** (shown for "Unknown workshop ID") opens an ID/URL dialog, parses it with `WB_ParseWorkshopId`, and calls `wbAdoptMod(workshopId, modId)`.
+2. Java serializes the job with other downloads, force-downloads the item, scans its `mods/` tree, and checks for the selected mod's exact `mod.info` ID. A mismatch names the contained IDs and installs or records nothing. A match installs all mods in the item and records their IDs. The fresh download supplies the remote timestamp, avoiding a phantom update on the next check.
+3. Lua shows the normal job status and refreshes the mod list on completion.
 
 ### First run / missing pieces
-- ZombieBuddy not installed → the mod doesn't load at all: our mod.info has `require=ZombieBuddy`, so the game refuses to enable us without it. (An earlier in-game "install ZombieBuddy" guidance label was removed as unreachable; ZombieBuddy's own javaagent prompt covers its setup.)
-- `Zomboid/workshopbridge.properties` is auto-created on first run with commented documentation of each setting. Currently the only setting is `steamcmd.path`: an explicit steamcmd override, validated by execution, always wins over the managed copy. An existing file is never overwritten.
-- steamcmd not found → the Java side **bootstraps it automatically** from Valve's CDN into `Zomboid/workshop_cache/steamcmd/` (with progress). No system-wide discovery: either the `steamcmd.path` override or the previously bootstrapped managed copy. `wbGetSteamCmdPath()` returns nil only when neither exists yet. If the binary can't execute from the game drive (noexec/sandboxed mount), it is bootstrapped again under `~/.cache/workshopbridge/steamcmd` (or `$XDG_CACHE_HOME`) and retried there.
-- Process launching: the default `posix_spawn` fails with EACCES inside steam-run's sandbox; the fix is `-Djdk.lang.Process.launchMechanism=FORK` on the game's Java command line (set manually - the mod used to set it itself at load, but the JDK freezes the mechanism on the first process launch, before the mod loads, so that had no effect).
+- Without ZombieBuddy, the game refuses to load the mod because `mod.info` requires it. Its javaagent prompt handles setup; our earlier in-game guidance was unreachable.
+- On first run, `Zomboid/workshopbridge.properties` is created with comments for each setting. The only setting is `steamcmd.path`, an executable-validated override that takes precedence over the managed copy. Existing files are never overwritten.
+- If steamcmd is missing, Java downloads it from Valve's CDN to `Zomboid/workshop_cache/steamcmd/` and reports progress. It does not search system paths: it uses `steamcmd.path` or the managed copy. `wbGetSteamCmdPath()` returns nil if neither exists. If the game-drive copy cannot execute (for example, a noexec mount), it retries from `~/.cache/workshopbridge/steamcmd` or `$XDG_CACHE_HOME`.
+- In steam-run's sandbox, `posix_spawn` may fail with EACCES. Set `-Djdk.lang.Process.launchMechanism=FORK` on the game's Java command line. Setting it from the mod is too late because the JDK freezes the mechanism on the first process launch, before the mod loads.
 
-## UI placement (B42, verified in-game Oct 2026 unless noted)
+## UI placement (B42; verified in-game Oct 2026 unless noted)
 
-- **Update all** + **Check for updates**: wrapped `ModSelector:create`; the buttons join vanilla's bottom-right cluster (MapsOrder, ModsOrder, Accept), anchored right+bottom with the same font and sizing flags vanilla uses. (First attempt anchored them left of the Back button, which is bottom-left - they rendered offscreen.)
-- **More tools** (not yet verified in-game): joins the same bottom-right cluster.
-- **Per-row**: wrap `ModListBox:doDrawItem` at class level; draw status text keyed by `item.item`'s mod id (doDrawItem gets the row wrapper, not the modData). Class-level (not per-instance) because the ModSelector is built at boot while other mods (e.g. ModFolders) patch the class later on OnMainMenuEnter - an instance wrap would shadow their patch. Whoever wraps last chains the previous implementation, so install order doesn't matter. Rows are not widget-composed, so no per-row buttons (would need manual hit-testing).
-- **Wrapper rule: always propagate return values.** Vanilla `prerender` does `v.height = y2 - y` where `y2 = self:doDrawItem(...)`; our first wrapper dropped the return and the menu rendered black with `__sub not defined for operands` thrown every frame. Wrapping a vanilla method means forwarding args AND returns.
-- **Per-mod Update button / status label**: `ModInfoPanel` - `createChildren()` once, `updateView(modInfo)` per selection. Button title is **Update** when a check flagged that mod, **Force update** otherwise. **Adopt...** (not yet verified in-game) occupies the Update button's slot for mods with "Unknown workshop ID"; the **Open in Workshop** button stacks below it whenever a workshop id is known.
+- **Update all** and **Check for updates** wrap `ModSelector:create` and join vanilla's bottom-right MapsOrder/ModsOrder/Accept cluster, using its anchors, font, and sizing flags.
+- **More tools** (not yet verified in-game) joins the same cluster.
+- **Per-row status:** wrap `ModListBox:doDrawItem` at class level and key text by `item.item`'s mod ID; the method receives a row wrapper, not `modData`. Class-level wrapping lets patches installed later (such as ModFolders on `OnMainMenuEnter`) chain regardless of load order. Rows are not widgets, so buttons would require manual hit-testing.
+- **Wrapper rule: propagate return values.** Vanilla `prerender` uses the result of `doDrawItem` to set row height, so wrappers must forward arguments and returns.
+- **Per-mod Update button/status:** `ModInfoPanel.createChildren()` runs once; `updateView(modInfo)` runs on selection. The button reads **Update** when a check flags the mod, otherwise **Force update**. **Adopt...** (not yet verified) replaces it for "Unknown workshop ID"; **Open in Workshop** appears below when an ID is known.
 - Row states (three): in our map → per-mod button (+ "Update available" badge after a check); game's `getWorkshopID()` non-empty → "Managed by Steam"; else grey "Unknown workshop ID".
-- Wrapping is idempotent per instance and re-applied defensively by `WB_RefreshModList` after every list reload (update-all, per-mod update, and download flows).
+- Wrapping is idempotent per instance and re-applied by `WB_RefreshModList` after update-all, per-mod update, and download reloads.
 
 ## Design constraints
 
-- **B42 only** (ZombieBuddy requirement).
+- **B42 only**
 - **Zero bytecode patches**: we use only ZombieBuddy's Lua-exposure surface, its most stable API.
-- **Never store Steam credentials.** Anonymous steamcmd login is the default; if it's ever rejected, fall back to an interactive user login (Steam Guard via the user's own terminal), never persisted.
-- **Mods load at game start** - updating files while sitting in the Mods menu is safe; changes apply on next new game / continue.
+- **Never store Steam credentials.** Anonymous steamcmd login only.
