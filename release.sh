@@ -226,13 +226,28 @@ else
 fi
 echo
 TAG="v$VERSION"
+# Pin the release tag to an explicit commit. gh auto-creates a missing tag
+# from the default branch (not necessarily what was just built), and it
+# refuses when a local-only tag exists ("has not been pushed ... specify
+# the --target flag to create a new tag"). Honor an existing local tag;
+# otherwise tag the commit the zip was built from.
+if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null 2>&1; then
+    TAG_TARGET="$(git rev-list -n 1 "$TAG")"
+else
+    TAG_TARGET="$(git rev-parse HEAD)"
+fi
+if [ "$TAG_TARGET" != "$(git rev-parse HEAD)" ]; then
+    echo "release.sh: note: local tag $TAG points at ${TAG_TARGET:0:12}, not at"
+    echo "  HEAD ($(git rev-parse --short HEAD)) — the release will be tagged"
+    echo "  there, while the zip was built from the working tree."
+fi
 if [ -z "$ASSUME_YES" ] && command -v gh >/dev/null 2>&1; then
-    if confirm "Create GitHub release $TAG and upload the zip?"; then
-        gh release create "$TAG" --title "V$VERSION" \
+    if confirm "Create GitHub release $TAG (tag -> ${TAG_TARGET:0:12}) and upload the zip?"; then
+        gh release create "$TAG" --target "$TAG_TARGET" --title "V$VERSION" \
             --notes-file "$NOTES" "$ZIP"
         exit 0
     fi
 fi
 echo "To publish manually:"
-echo "  gh release create $TAG --title \"V$VERSION\" \\"
+echo "  gh release create $TAG --target $TAG_TARGET --title \"V$VERSION\" \\"
 echo "    --notes-file \"$NOTES\" \"$ZIP\""
