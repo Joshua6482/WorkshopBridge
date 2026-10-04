@@ -122,9 +122,10 @@ public final class SteamCmdApi {
      * {@code java.awt.Desktop} first (the platform-sanctioned path), then
      * falls back to OS-specific launcher commands. The id is validated as
      * digits only before it goes anywhere near a command line, so the
-     * {@code cmd /c start} path on Windows can't be injected into.
-     * Process launching inherits the JVM-wide process launch mechanism
-     * (see Main.main's FORK handling for the steam-run/posix_spawn issue).
+     * {@code cmd /c start} path on Windows can't be injected into. On systems
+     * where the JDK's posix_spawn launcher is blocked (e.g. inside
+     * steam-run's sandbox), add {@code -Djdk.lang.Process.launchMechanism=FORK}
+     * to the game's Java command line; see docs/INSTALL.md.
      */
     @LuaMethod(name = "wbOpenWorkshopPage", global = true)
     public static boolean wbOpenWorkshopPage(String workshopId) {

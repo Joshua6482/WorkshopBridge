@@ -2,7 +2,6 @@ package com.workshopbridge;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
-import java.util.Locale;
 
 /**
  * Optional entry point: ZombieBuddy calls {@code Main.main(String[])} when the
@@ -10,47 +9,26 @@ import java.util.Locale;
  * first Lua call, when ZomboidFileSystem is guaranteed ready.
  */
 public class Main {
-    /**
-     * Name of the JDK's process-launch selector. The default (posix_spawn)
-     * fails with EACCES inside steam-run's bubblewrap sandbox for some
-     * runtimes (observed Oct 2026 with the GOG-bundled JRE on NixOS:
-     * every ProcessBuilder.start() died with "posix_spawn failed,
-     * error: 13 (Permission denied)" while fork+execve worked fine).
-     */
-    static final String LAUNCH_MECHANISM_PROP = "jdk.lang.Process.launchMechanism";
-
     public static void main(String[] args) {
-        ensureForkLaunchMechanism();
         exposeLuaApi();
         System.out.println("[WorkshopBridge] Java backend loaded via ZombieBuddy "
                 + "(Lua API: wbIsAvailable, wbGetSteamCmdPath, wbGetWorkshopId, "
                 + "wbCheckForUpdates, wbUpdateAll, wbUpdateMod, wbInvalidateModCaches, "
                 + "wbGetJobStatus, wbOpenWorkshopPage)");
-        probeNativeDialogs();
+        runDiagnostics();
     }
 
     /**
-     * Logs which native file-dialog backends are on the classpath, for future
-     * reference (a "More tools" panel with import/export was considered; the
-     * in-game approach won, but this settles whether LWJGL's tinyfd/NFD
-     * modules ship with the game). Pure probe: never throws, never
-     * initializes anything.
+     * Runs {@code com.workshopbridge.Diagnostics.run()} when the diagnostics
+     * sources were compiled in (dev builds). Reflective so release builds
+     * ({@code -Pdiagnostics=false}) compile and run without the class.
      */
-    static void probeNativeDialogs() {
-        boolean tinyfd = false;
-        boolean nfd = false;
+    private static void runDiagnostics() {
         try {
-            Class.forName("org.lwjgl.util.tinyfd.TinyFileDialogs");
-            tinyfd = true;
+            Class.forName("com.workshopbridge.Diagnostics").getMethod("run").invoke(null);
         } catch (Throwable ignored) {
+            // diagnostics excluded from this build
         }
-        try {
-            Class.forName("org.lwjgl.util.nfd.NativeFileDialog");
-            nfd = true;
-        } catch (Throwable ignored) {
-        }
-        System.out.println("[WorkshopBridge] native dialog backends: tinyfd=" + tinyfd
-                + " nfd=" + nfd);
     }
 
     /**
@@ -94,28 +72,6 @@ public class Main {
         } catch (Throwable t) {
             System.out.println("[WorkshopBridge] manual Lua exposure failed: " + t
                     + " (wb* globals may only appear after a Lua reload)");
-        }
-    }
-
-    /**
-     * Best-effort workaround for the posix_spawn/EACCES sandbox problem above:
-     * when the user has not chosen explicitly, ask the JDK to spawn processes
-     * with fork instead. The JDK reads this property once, when
-     * {@code java.lang.ProcessImpl} first initializes; this runs at mod load,
-     * before any of our ProcessBuilder use, so it normally takes effect. If
-     * the class already initialized (or the user set the flag themselves) this
-     * is a harmless no-op. Package-private so tests can call it.
-     */
-    static void ensureForkLaunchMechanism() {
-        // jdk.lang.Process.launchMechanism is only read by the Unix ProcessImpl;
-        // on Windows it is a no-op, so don't set it (or log about it) there.
-        if (System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("win")) {
-            return;
-        }
-        if (System.getProperty(LAUNCH_MECHANISM_PROP) == null) {
-            System.setProperty(LAUNCH_MECHANISM_PROP, "FORK");
-            System.out.println("[WorkshopBridge] process launch mechanism set to FORK"
-                    + " (posix_spawn is unreliable in some sandboxes)");
         }
     }
 }
