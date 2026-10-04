@@ -9,7 +9,8 @@ import java.util.Map;
  * Minimal JSON parser and writer. Handles objects, arrays, strings (with
  * escapes, including unicode escapes and surrogate pairs), numbers,
  * booleans and null.
- * Only what WorkshopBridge needs - not a general-purpose library.
+ * Not feature-complete. 
+ * Used for Lua-Java bridge, handling Steam Web API responses, and "workshopbridge_map.json".
  */
 public final class Json {
     private Json() {}

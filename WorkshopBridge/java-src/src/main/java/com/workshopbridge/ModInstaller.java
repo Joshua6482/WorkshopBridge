@@ -24,15 +24,13 @@ import java.util.function.Consumer;
  *
  * Each mod is installed with an atomic swap: the new tree is copied to a
  * staging dir first, then two renames swing it live ({@code dest -> backup},
- * {@code staging -> dest}). A rename is a single filesystem operation, so
- * {@code <mods>/<ModDir>/} is ever fully the old version or fully the new
- * one - never half-deleted or half-copied, even if the game is killed
- * mid-install.
+ * {@code staging -> dest}). A rename is atomic so should never leave a 
+ * partially updated mod directory.
  *
  * Staging and backup dirs live OUTSIDE the mods folder (in a stage dir under
  * the workshop cache): the game's own file watcher walks the mods tree, and
- * watching a backup appear and be deleted mid-walk throws scary errors in
- * the game log. Leftover staging dirs from a crashed run are repaired by
+ * watching a backup appear and be deleted mid-walk throws errors in the log. 
+ * Leftover staging dirs from a crashed run are repaired by
  * {@link #recoverInterruptedInstalls} before every install.
  */
 public final class ModInstaller {
