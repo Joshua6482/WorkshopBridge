@@ -16,6 +16,10 @@
 # (see WorkshopBridge/java-src/README.md).
 #
 # Needs: JDK 17+ and Gradle on PATH. Run from anywhere.
+#
+# Env:
+#   WB_DIAGNOSTICS=false  exclude dev-only probes (Diagnostics.java) from
+#                         the build; used by ./release.sh for release jars.
 set -euo pipefail
 cd "$(dirname "$0")"  # repo root
 SRC="WorkshopBridge/java-src"
@@ -117,5 +121,10 @@ if ! has_game_classes "$PZ_JAVA"; then
 fi
 
 echo "Compiling against game classes: $PZ_JAVA"
-(cd "$SRC" && gradle -PpzJavaDir="$PZ_JAVA" installJar)
+GRADLE_DIAG=()
+if [ "${WB_DIAGNOSTICS:-true}" = "false" ]; then
+    echo "(diagnostics excluded: release build)"
+    GRADLE_DIAG=(-Pdiagnostics=false)
+fi
+(cd "$SRC" && gradle -PpzJavaDir="$PZ_JAVA" "${GRADLE_DIAG[@]}" installJar)
 echo "Built: WorkshopBridge/42/media/java/WorkshopBridge.jar"
