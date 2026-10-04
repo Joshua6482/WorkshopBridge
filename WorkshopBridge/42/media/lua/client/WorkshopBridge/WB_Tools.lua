@@ -49,13 +49,23 @@ end
 
 -- Shared completion handling for import jobs: progress while running, then
 -- hide + flash the summary (or a stuck error) and rescan the mod list so
--- newly installed mods show up.
+-- newly installed mods show up. The game mod caches are invalidated each
+-- time a download in the batch finishes (not just at the end), so mods
+-- that landed early are visible even while later ones still download.
 local function WB_TrackImportJob(ms, jobId, what)
     print("[WorkshopBridge] import started (" .. tostring(what)
         .. ", job " .. tostring(jobId) .. ")")
+    local lastInvalidated = 0
     WB_TrackJob(jobId, {
         onUpdate = function(st)
             WB_ShowProgress(ms, st.message or WB_Text.Importing)
+            local done = st and tonumber(st.done) or 0
+            if done > lastInvalidated then
+                lastInvalidated = done
+                if type(wbInvalidateModCaches) == "function" then
+                    pcall(wbInvalidateModCaches)
+                end
+            end
         end,
         onDone = function(st)
             WB_HideProgress()
