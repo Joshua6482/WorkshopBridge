@@ -96,6 +96,17 @@ public final class JobManager {
         return submitDownload("update", job -> runUpdate(job, workshopId));
     }
 
+    /** Downloads + installs each id in order (duplicates and non-numeric
+     * ids are skipped). One job so the progress panel shows "Importing i/N". */
+    public String submitImport(List<String> workshopIds) {
+        return submitDownload("import", job -> runImport(job, workshopIds));
+    }
+
+    /** Resolves a workshop collection's children, then imports them. */
+    public String submitImportCollection(String collectionId) {
+        return submitDownload("import-collection", job -> runImportCollection(job, collectionId));
+    }
+
     /** JSON status object, or null for unknown job ids. */
     public String statusJson(String jobId) {
         Job j = jobs.get(jobId);
@@ -243,6 +254,83 @@ public final class JobManager {
         }
         job.done = 1;
         job.message = "Done";
+        job.state = State.DONE;
+    }
+
+    private void runImportCollection(Job job, String collectionId) {
+        if (collectionId == null || !collectionId.matches("\\d+")) {
+            fail(job, new IllegalArgumentException("invalid workshop id: " + collectionId));
+            return;
+        }
+        job.message = "Resolving collection " + collectionId + "...";
+        final List<String> children;
+        try {
+            children = WorkshopApi.getCollectionChildren(collectionId);
+        } catch (Exception e) {
+            fail(job, e);
+            return;
+        }
+        if (children.isEmpty()) {
+            job.message = "No mods found in collection " + collectionId
+                    + " (not a collection, or it is empty/private)";
+            job.state = State.DONE;
+            return;
+        }
+        runImport(job, children);
+    }
+
+    private void runImport(Job job, List<String> workshopIds) {
+        // clean the input: digits only, order kept, duplicates dropped
+        List<String> ids = new ArrayList<>();
+        for (String id : workshopIds) {
+            if (id != null && id.matches("\\d+") && !ids.contains(id)) {
+                ids.add(id);
+            }
+        }
+        if (ids.isEmpty()) {
+            fail(job, new IllegalArgumentException("no valid workshop ids to import"));
+            return;
+        }
+        // one batched timestamp lookup up front, like update-all does
+        Map<String, Long> remote;
+        boolean apiOk;
+        try {
+            remote = WorkshopApi.getTimeUpdated(ids);
+            apiOk = true;
+        } catch (Exception e) {
+            // best effort: record 0 so a later check flags these as
+            // "update available" instead of wrongly considering them current
+            remote = new java.util.HashMap<>();
+            apiOk = false;
+        }
+        job.total = ids.size();
+        int imported = 0;
+        List<String> skipped = new ArrayList<>();
+        int i = 0;
+        for (String wsid : ids) {
+            i++;
+            job.done = i - 1;
+            Long tu = remote.get(wsid);
+            if (tu == null && apiOk) {
+                // the API listed no entry: deleted or private; skip it
+                skipped.add(wsid);
+                continue;
+            }
+            job.message = "Importing " + wsid + " (" + i + "/" + ids.size() + ")...";
+            try {
+                downloadAndInstall(wsid, tu == null ? 0L : tu);
+                imported++;
+            } catch (Exception ex) {
+                fail(job, new Exception("failed on " + wsid + ": " + ex.getMessage(), ex));
+                return;
+            }
+            job.done = i;
+        }
+        job.message = imported == 1 ? "Imported 1 mod" : "Imported " + imported + " mods";
+        if (!skipped.isEmpty()) {
+            job.message += " (" + skipped.size() + " skipped: no longer listed - "
+                    + String.join(", ", skipped) + ")";
+        }
         job.state = State.DONE;
     }
 

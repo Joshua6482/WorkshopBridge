@@ -15,6 +15,7 @@
 require "WorkshopBridge/WB_Config"
 require "WorkshopBridge/WB_Jobs"
 require "WorkshopBridge/WB_Download"
+require "WorkshopBridge/WB_Tools"
 
 -- ---------- helpers ----------
 
@@ -30,17 +31,8 @@ local function WB_GetModId(info)
     return nil
 end
 
--- the game's own workshop id signal (non-empty only for Steam-managed mods)
-local function WB_GameWorkshopId(modInfo)
-    if modInfo and type(modInfo.getWorkshopID) == "function" then
-        local ok, id = pcall(function() return modInfo:getWorkshopID() end)
-        if ok and id and id ~= "" then return id end
-    end
-    return nil
-end
-
--- (WB_WorkshopIdFor lives in WB_Jobs.lua now: the update-available state
--- there resolves mod ids through it too.)
+-- (WB_WorkshopIdFor / WB_GameWorkshopIdFor live in WB_Jobs.lua now: the
+-- update-available state there resolves mod ids through them too.)
 
 -- ---------- per-mod panel state ----------
 -- (declared up here: the button handlers below close over these)
@@ -67,7 +59,7 @@ local function WB_RefreshModPanel(panel, modInfo)
     panel.wbModId = modId
     if not panel.wbUpdateBtn then return end
     local wsid = WB_WorkshopIdFor(modId)
-    local gameWsid = WB_GameWorkshopId(modInfo)
+    local gameWsid = WB_GameWorkshopIdFor(modInfo)
     -- the workshop page button shows whenever an id is known: tracked by
     -- us or Steam-managed alike
     panel.wbWorkshopId = wsid or gameWsid
@@ -297,13 +289,16 @@ local function WB_AddMenuButtons(ms)
     local xUpdate = anchor:getX() - gap - bw
     local xCheck = xUpdate - gap - bw
     local xDownload = xCheck - gap - bw
+    local xTools = xDownload - gap - bw
     ms.wbCheckBtn = ISButton:new(xCheck, y, bw, bh, WB_Text.CheckForUpdates, ms,
         function() WB_OnCheckAll(ms) end)
     ms.wbUpdateAllBtn = ISButton:new(xUpdate, y, bw, bh, WB_Text.UpdateAll, ms,
         function() WB_OnUpdateAll(ms) end)
     ms.wbDownloadBtn = ISButton:new(xDownload, y, bw, bh, WB_Text.Download, ms,
         function() WB_ShowDownloadDialog(ms) end)
-    for _, b in ipairs({ ms.wbCheckBtn, ms.wbUpdateAllBtn, ms.wbDownloadBtn }) do
+    ms.wbToolsBtn = ISButton:new(xTools, y, bw, bh, WB_Text.MoreTools, ms,
+        function() WB_ShowToolsDialog(ms) end)
+    for _, b in ipairs({ ms.wbCheckBtn, ms.wbUpdateAllBtn, ms.wbDownloadBtn, ms.wbToolsBtn }) do
         b:initialise()
         b:instantiate()
         b:setAnchorLeft(false)
