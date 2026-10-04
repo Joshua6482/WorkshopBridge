@@ -101,7 +101,8 @@ function WB_RefreshModList(ms)
         pcall(wbInvalidateModCaches)
     end
     if ms and ms.reloadMods then pcall(function() ms:reloadMods() end) end
-    -- make sure our row wrap survived the reload (re-applied defensively)
+    -- re-hook the instance (menu buttons, update pump); the row wrap lives
+    -- on the ModListBox class so it survives list reloads on its own
     WB_HookInstance(ms)
 end
 
@@ -300,42 +301,26 @@ local function WB_AddMenuButtons(ms)
     end
 end
 
--- Class-level doDrawItem, bypassing our own instance wrapper. Mods like
--- ModFolders patch ModListBox.doDrawItem at class level after (or before)
--- we wrap the listbox instance; our instance field would then shadow their
--- patch, so the re-hook re-syncs to whatever the class currently has.
--- Falls back to the previously captured base (or the instance field on
--- first wrap) when there is no class table to read, e.g. in tests.
-local function WB_ClassDoDrawItem(list)
-    local mt = getmetatable(list)
-    local classTbl = mt and mt.__index
-    if type(classTbl) == "table" and type(classTbl.doDrawItem) == "function" then
-        return classTbl.doDrawItem
-    end
-    return nil
+-- The ModListBox class our row wrapper chains. Global so tests can stub it.
+function WB_GetModListBoxClass()
+    if ModSelector and ModSelector.ModListBox then return ModSelector.ModListBox end
+    return ModListBox
 end
 
-local function WB_WrapRowDrawing(ms)
-    local panel = ms.modListPanel
-    local list = panel and panel.modList
-    if not list then return end
-    local baseDraw = WB_ClassDoDrawItem(list)
-    if not baseDraw then
-        if list.wbRowWrapped then
-            baseDraw = list.wbBaseDraw
-        else
-            baseDraw = list.doDrawItem
-        end
-    end
+-- Wrap ModListBox:doDrawItem at CLASS level, not per listbox instance.
+-- The ModSelector is created eagerly with the MainScreen at boot, but mods
+-- like ModFolders patch ModListBox.doDrawItem at class level later, on
+-- OnMainMenuEnter. A per-instance wrap would capture vanilla as its base
+-- and then shadow their patch, so folder rows would render through vanilla
+-- (big red X, no folder buttons). Wrapping the class instead is
+-- order-proof: whoever wraps last chains the previous implementation.
+local function WB_WrapRowDrawing()
+    local MLB = WB_GetModListBoxClass()
+    if not MLB or MLB.wbRowWrapped then return end
+    local baseDraw = MLB.doDrawItem
     if type(baseDraw) ~= "function" then return end
-    -- already wrapped around this exact base: nothing to do
-    if list.wbRowWrapped and list.wbBaseDraw == baseDraw then return end
-    list.wbRowWrapped = true
-    list.wbBaseDraw = baseDraw
-    -- ModFolders adds its +/- folder icons in the row's right-hand strip;
-    -- shift our badge left of them when its panel controls are present.
-    local modFoldersPresent = panel.mfNewFolderButton ~= nil
-    list.doDrawItem = function(lb, y, item, alt)
+    MLB.wbRowWrapped = true
+    MLB.doDrawItem = function(lb, y, item, alt)
         -- vanilla prerender does arithmetic on the return value
         -- (v.height = y2 - y), so it MUST be propagated
         local y2 = baseDraw(lb, y, item, alt)
@@ -345,8 +330,12 @@ local function WB_WrapRowDrawing(ms)
         local data = item and item.item or nil
         local modId = data and WB_GetModId(data)
         if modId and WB_IsUpdateAvailable(modId) then
+            -- ModFolders draws its +/- folder icons in the row's right-hand
+            -- strip; shift our badge left of them when its panel controls are
+            -- present (resolved per draw: they install after our wrap).
             local bx = lb:getWidth() - 10
-            if modFoldersPresent then
+            local panel = lb and lb.parent or nil
+            if panel and panel.mfNewFolderButton ~= nil then
                 local buttonH = getTextManager():getFontHeight(UIFont.Small) + 6
                 bx = bx - 3 * buttonH - 16
             end
@@ -386,7 +375,6 @@ function WB_HookInstance(ms)
     if not ms then return end
     wbScreen = ms
     WB_AddMenuButtons(ms)
-    WB_WrapRowDrawing(ms)
     WB_WrapUpdatePump(ms)
 end
 
@@ -496,6 +484,9 @@ function WB_HookModsMenu()
         end
     end
     WB_HookModInfoPanel()
+    -- class-level row wrap, outside the wbHooked guard so a re-call retries
+    -- if the ModListBox class wasn't available the first time
+    WB_WrapRowDrawing()
     -- if the screen already exists (re-entry), hook the live instance too
     if ModSelector.instance then
         pcall(function() WB_HookInstance(ModSelector.instance) end)

@@ -59,19 +59,23 @@ function ISButton:new(x, y, w, h, title, clicktarget, onclick, ...)
 end
 
 local badgesDrawn, rowsDrawn = {}, {}
-local fakeList = {
-    width = 600,
+-- fake ModListBox class: our row wrap is class-level, so the listbox
+-- instance delegates to it via the metatable, like the game's class system
+local fakeMLClass = {
     doDrawItem = function(lb, y, item, alt)
         table.insert(rowsDrawn, { item = item })
         return y + 40 -- vanilla returns y + height; prerender does math on it
     end,
+}
+local fakeList = setmetatable({
+    width = 600,
     getWidth = function(self) return self.width end,
     drawTextRight = function(self, text, x, y, r, g, b, a, font)
         table.insert(badgesDrawn, { text = text, x = x, y = y })
     end,
-}
+}, { __index = fakeMLClass })
 local fakeModListPanel = { modList = fakeList }
-ModSelector = { instance = nil }
+ModSelector = { instance = nil, ModListBox = fakeMLClass }
 function ModSelector.create(self)
     self.backButton = ISButton:new(880, 710, 120, 30, "Back", self, function() end)
     self.mapOrderbtn = ISButton:new(700, 710, 100, 30, "MapsOrder", self, function() end)
@@ -203,67 +207,81 @@ end)
 check(okFolder, "folder row draws without error", errFolder)
 check(#rowsDrawn == 1 and #badgesDrawn == 0, "no badge on folder row")
 
--- ModFolders patches ModListBox.doDrawItem at class level. If that patch
--- lands after our instance wrap, the re-hook (as done by WB_RefreshModList)
--- must re-sync to it instead of leaving our instance field shadowing it.
-local classDrawn = {}
-local fakeClass = {
-    doDrawItem = function(lb, y, item, alt)
-        table.insert(classDrawn, { y = y, item = item })
-        return y + 40
-    end,
-}
-local lateBadges = {}
-local lateList = setmetatable({
-    width = 600,
-    getWidth = function(self) return self.width end,
-    drawTextRight = function(self, text, x, y, ...) table.insert(lateBadges, { text = text, x = x }) end,
-}, { __index = fakeClass })
-local lateMs = setmetatable({
-    x = 0, y = 0, width = 1024, height = 768, children = {},
-    backButton = ISButton:new(880, 710, 120, 30, "Back", nil, function() end),
-    mapOrderbtn = ISButton:new(700, 710, 100, 30, "MapsOrder", nil, function() end),
-    modListPanel = { modList = lateList },
-}, { __index = UIElement })
-WB_HookInstance(lateMs)
-lateList:doDrawItem(100, { item = fakeModInfo("SomeMod", "") }, false)
-check(#classDrawn == 1, "wrapped draw chains the class-level draw")
--- ModFolders installs its class patch late
-local mfDrawn = {}
-fakeClass.doDrawItem = function(lb, y, item, alt)
-    table.insert(mfDrawn, { y = y, item = item })
-    return y + 42
+-- helper: a fresh listbox class + instance delegating to it
+local function makeListBoxPair(vanillaRet, parent)
+    local cls = {
+        doDrawItem = function(lb, y, item, alt)
+            table.insert(rowsDrawn, { item = item })
+            return y + vanillaRet
+        end,
+    }
+    local list = setmetatable({
+        width = 600,
+        parent = parent,
+        getWidth = function(self) return self.width end,
+        drawTextRight = function(self, text, x, y, ...)
+            table.insert(badgesDrawn, { text = text, x = x, y = y })
+        end,
+    }, { __index = cls })
+    return cls, list
 end
-WB_HookInstance(lateMs) -- re-hook, as WB_RefreshModList does after jobs
-local retLate = lateList:doDrawItem(100, { item = fakeModInfo("SomeMod", "") }, false)
-check(retLate == 142, "re-hook re-syncs to the late class patch", retLate)
-check(#mfDrawn == 1 and #classDrawn == 1, "late patch used exactly once, old base retired")
+-- ModFolders-style class patch: folder rows drawn by it, rest chained
+local function installFakeModFolders(cls, folderRows)
+    local prev = cls.doDrawItem
+    cls.doDrawItem = function(lb, y, item, alt)
+        if item and item.item and item.item.mfFolderRow then
+            table.insert(folderRows, item)
+            return y + 99
+        end
+        return prev(lb, y, item, alt)
+    end
+end
 
--- with ModFolders panel controls present, our badge shifts left of its icons
+-- install order 1: WB wraps first (boot), ModFolders patches the class later
+-- (OnMainMenuEnter) - the real game's order; must not shadow the patch
+rowsDrawn, badgesDrawn = {}, {}
+local classB, listB = makeListBoxPair(40)
+ModSelector.ModListBox = classB
+WB_HookModsMenu() -- wraps classB while it is still vanilla
+local mfFolderRowsB = {}
+installFakeModFolders(classB, mfFolderRowsB)
+local retB = listB:doDrawItem(100, { item = { mfFolderRow = true, name = "F" } }, false)
+check(retB == 199, "WB-first: late ModFolders patch draws folder rows", retB)
+check(#mfFolderRowsB == 1 and #badgesDrawn == 0, "WB-first: folder row handled, no badge")
+rowsDrawn, badgesDrawn = {}, {}
+listB:doDrawItem(100, { item = fakeModInfo("SomeMod", "") }, false)
+check(#rowsDrawn == 1 and #badgesDrawn == 1, "WB-first: normal rows chain through both")
+
+-- install order 2: ModFolders first, WB wraps second
+rowsDrawn, badgesDrawn = {}, {}
+local classC, listC = makeListBoxPair(40)
+local mfFolderRowsC = {}
+installFakeModFolders(classC, mfFolderRowsC)
+ModSelector.ModListBox = classC
+WB_HookModsMenu() -- wraps classC around the ModFolders patch
+local retC = listC:doDrawItem(100, { item = { mfFolderRow = true, name = "F" } }, false)
+check(retC == 199, "MF-first: folder row handled by ModFolders", retC)
+check(#mfFolderRowsC == 1 and #badgesDrawn == 0, "MF-first: no badge on folder row")
+rowsDrawn, badgesDrawn = {}, {}
+listC:doDrawItem(100, { item = fakeModInfo("SomeMod", "") }, false)
+check(#rowsDrawn == 1 and #badgesDrawn == 1, "MF-first: vanilla draw + badge both run")
+
+-- with ModFolders panel controls present, the badge shifts left of its icons
+-- (detected per draw via listbox.parent: the controls install after our wrap)
 getTextManager = function()
     return { getFontHeight = function(self, font) return 14 end }
 end
-local mfBadges = {}
-local mfList = {
-    width = 600,
-    doDrawItem = function(lb, y, item, alt) return y + 40 end,
-    getWidth = function(self) return self.width end,
-    drawTextRight = function(self, text, x, y, ...) table.insert(mfBadges, { text = text, x = x }) end,
-}
-local mfMs = setmetatable({
-    x = 0, y = 0, width = 1024, height = 768, children = {},
-    backButton = ISButton:new(880, 710, 120, 30, "Back", nil, function() end),
-    mapOrderbtn = ISButton:new(700, 710, 100, 30, "MapsOrder", nil, function() end),
-    modListPanel = { modList = mfList, mfNewFolderButton = {} },
-}, { __index = UIElement })
-WB_HookInstance(mfMs)
-mfList:doDrawItem(100, { item = fakeModInfo("SomeMod", "") }, false)
-check(#mfBadges == 1, "badge drawn with ModFolders present")
+ModSelector.ModListBox = fakeMLClass
+rowsDrawn, badgesDrawn = {}, {}
+local _, listMF = makeListBoxPair(40, { mfNewFolderButton = {} })
+-- listMF delegates to its own fresh class; point it at the wrapped fixture
+-- class instead so the real wrapper under test runs
+setmetatable(listMF, { __index = fakeMLClass })
+listMF:doDrawItem(100, { item = fakeModInfo("SomeMod", "") }, false)
+check(#badgesDrawn == 1, "badge drawn with ModFolders present")
 local expectedX = 600 - 10 - 3 * (14 + 6) - 16
-check(mfBadges[1] and mfBadges[1].x == expectedX,
-    "badge shifted left of ModFolders icons", mfBadges[1] and mfBadges[1].x)
--- the throwaway hooks above stole the global wbScreen; give it back
-WB_HookInstance(ms)
+check(badgesDrawn[1] and badgesDrawn[1].x == expectedX,
+    "badge shifted left of ModFolders icons", badgesDrawn[1] and badgesDrawn[1].x)
 
 -- ---------- per-mod update flow ----------
 panel:updateView(fakeModInfo("SomeMod", ""))
