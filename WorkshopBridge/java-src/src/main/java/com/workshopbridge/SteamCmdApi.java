@@ -79,6 +79,69 @@ public final class SteamCmdApi {
     }
 
     /**
+     * Exports workshop ids (comma-separated) as one Steam Workshop URL per
+     * line to a timestamped file under {@code <Zomboid>/workshopbridge-exports/}.
+     * Synchronous: writing a small text file needs no job. Returns a JSON
+     * result ({@code ok/path/count}) or null on failure.
+     */
+    @LuaMethod(name = "wbExportModList", global = true)
+    public static String wbExportModList(String idsCsv) {
+        try {
+            java.util.List<String> ids = parseIdList(idsCsv);
+            String path = Backend.get().exportModList(ids);
+            java.util.Map<String, Object> r = new java.util.LinkedHashMap<>();
+            r.put("ok", true);
+            r.put("path", path);
+            r.put("count", ids.size());
+            return Json.stringify(r);
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
+    /** Starts an import job for the given comma-separated workshop ids.
+     * Returns a job id, or null on failure. */
+    @LuaMethod(name = "wbImportMods", global = true)
+    public static String wbImportMods(String idsCsv) {
+        try {
+            java.util.List<String> ids = parseIdList(idsCsv);
+            if (ids.isEmpty()) {
+                return null;
+            }
+            return Backend.get().jobs().submitImport(ids);
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
+    /** Starts an import job for every mod in a workshop collection.
+     * Returns a job id, or null on failure. */
+    @LuaMethod(name = "wbImportCollection", global = true)
+    public static String wbImportCollection(String collectionId) {
+        try {
+            return Backend.get().jobs().submitImportCollection(collectionId);
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
+    /** Splits a comma/newline/whitespace-separated id list, digits only,
+     * order kept, duplicates dropped. */
+    static java.util.List<String> parseIdList(String idsCsv) {
+        java.util.List<String> ids = new java.util.ArrayList<>();
+        if (idsCsv == null) {
+            return ids;
+        }
+        for (String part : idsCsv.split("[,\\s]+")) {
+            String id = part.trim();
+            if (id.matches("\\d+") && !ids.contains(id)) {
+                ids.add(id);
+            }
+        }
+        return ids;
+    }
+
+    /**
      * Invalidates the game's cached mod directory list and mod-info cache so a
      * subsequent {@code ModSelector:reloadMods()} actually sees freshly
      * downloaded/updated mods. The game scans the mod folders once and caches

@@ -86,6 +86,18 @@ function WB_InstallDebugStub()
         return newJob("update", 8)
     end
 
+    function wbExportModList(idsCsv)
+        return "stub/workshopbridge-exports/modlist-stub.txt"
+    end
+
+    function wbImportMods(idsCsv)
+        return newJob("import", 8)
+    end
+
+    function wbImportCollection(collectionId)
+        return newJob("import-collection", 8)
+    end
+
     function wbOpenWorkshopPage(workshopId)
         return true
     end

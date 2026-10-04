@@ -422,6 +422,69 @@ public class WBTest {
         Map<String, Object> bst = awaitDone(jobs, badId);
         check("failed".equals(bst.get("state")), "invalid id fails", bst.get("state"));
 
+        // ---- 5c. more tools: export ----
+        String exportPath = backend.exportModList(List.of("2685600088", "12345"));
+        File exportFile = new File(exportPath);
+        check(exportFile.isFile(), "export writes file", exportPath);
+        check("workshopbridge-exports".equals(exportFile.getParentFile().getName()),
+                "export lands in workshopbridge-exports", exportPath);
+        check(exportPath.endsWith(".txt"), "export file is a .txt", exportPath);
+        String exportText = Files.readString(exportFile.toPath());
+        check(exportText.contains(
+                        "https://steamcommunity.com/sharedfiles/filedetails/?id=2685600088\n")
+                        && exportText.contains(
+                        "https://steamcommunity.com/sharedfiles/filedetails/?id=12345\n"),
+                "export writes one URL per line", exportText);
+
+        // ---- 5d. more tools: import job (fake steamcmd does the work) ----
+        String impId = jobs.submitImport(List.of("99994", "99995"));
+        Map<String, Object> ist = awaitDone(jobs, impId);
+        check("done".equals(ist.get("state")), "import completes", ist.get("error"));
+        check(new File(backend.modsDir(), "FakeMod-99994/common/mod.info").isFile()
+                        && new File(backend.modsDir(), "FakeMod-99995/common/mod.info").isFile(),
+                "import installs every id");
+        check(backend.workshopMap().snapshot().containsKey("99994")
+                        && backend.workshopMap().snapshot().containsKey("99995"),
+                "import records workshop->mod in the map");
+        check(String.valueOf(ist.get("message")).contains("Imported 2"),
+                "import message counts", ist.get("message"));
+        // a failing id fails the job with the id named (fake exits 1 for 0)
+        String impFail = jobs.submitImport(List.of("99993", "0"));
+        Map<String, Object> ifst = awaitDone(jobs, impFail);
+        check("failed".equals(ifst.get("state")), "import failure -> failed job",
+                ifst.get("state"));
+        check(String.valueOf(ifst.get("error")).contains("failed on 0"),
+                "import failure names the id", ifst.get("error"));
+        // junk ids never reach the downloader
+        String impJunk = jobs.submitImport(List.of("abc", "12x", ""));
+        Map<String, Object> jst = awaitDone(jobs, impJunk);
+        check("failed".equals(jst.get("state")), "import of only-junk fails cleanly",
+                jst.get("state"));
+
+        // ---- 5e. collection children parsing (offline, inline JSON) ----
+        String collJson = "{\"response\":{\"result\":1,\"publishedfiledetails\":[{"
+                + "\"publishedfileid\":\"555\",\"result\":1,"
+                + "\"children\":[{\"publishedfileid\":\"111\",\"sortorder\":1},"
+                + "{\"publishedfileid\":222,\"sortorder\":2},"
+                + "{\"kind\":\"collection\"}]}]}}";
+        check(WorkshopApi.parseChildren(collJson).equals(List.of("111", "222")),
+                "parseChildren reads string+numeric child ids",
+                WorkshopApi.parseChildren(collJson));
+        String fileJson = "{\"response\":{\"publishedfiledetails\":[{\"publishedfileid\":\"666\"}]}}";
+        check(WorkshopApi.parseChildren(fileJson).isEmpty(),
+                "parseChildren empty for non-collection (not an error)");
+        check(throwsIAE(() -> WorkshopApi.parseChildren("nope")),
+                "parseChildren rejects malformed JSON");
+        check(throwsIAE(() -> WorkshopApi.parseChildren("{\"response\":{}}")),
+                "parseChildren rejects missing details array");
+
+        // ---- 5f. id list parsing ----
+        check(SteamCmdApi.parseIdList("1, 2\n3\t2").equals(List.of("1", "2", "3")),
+                "parseIdList splits on comma/whitespace and dedupes");
+        check(SteamCmdApi.parseIdList("abc, ,12x").isEmpty(),
+                "parseIdList rejects junk");
+        check(SteamCmdApi.parseIdList(null).isEmpty(), "parseIdList null -> empty");
+
         // ---- 7. unknown job ----
         check(jobs.statusJson("no-such-job") == null, "unknown job -> null");
 

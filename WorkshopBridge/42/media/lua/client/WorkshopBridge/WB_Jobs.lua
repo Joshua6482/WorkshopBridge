@@ -19,6 +19,15 @@ function WB_WorkshopIdFor(modId)
     return nil
 end
 
+-- the game's own workshop id signal (non-empty only for Steam-managed mods)
+function WB_GameWorkshopIdFor(modInfo)
+    if modInfo and type(modInfo.getWorkshopID) == "function" then
+        local ok, id = pcall(function() return modInfo:getWorkshopID() end)
+        if ok and id and id ~= "" then return id end
+    end
+    return nil
+end
+
 local activeJobs = {}       -- jobId -> { onUpdate=fn, onDone=fn }
 local lastJobState = {}     -- jobId -> last seen state (for transition logging)
 -- workshopId -> true, set by check jobs. Keyed by workshop id, not mod id:

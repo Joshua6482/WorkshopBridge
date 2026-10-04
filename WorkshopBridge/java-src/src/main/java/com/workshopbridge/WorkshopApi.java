@@ -60,6 +60,23 @@ public final class WorkshopApi {
         }
     }
 
+    /**
+     * Returns the workshop ids contained in a collection item, in order.
+     * A non-collection id (or a deleted/private one) yields an empty list.
+     */
+    public static List<String> getCollectionChildren(String collectionId) throws IOException {
+        if (collectionId == null || !collectionId.matches("\\d+")) {
+            throw new IllegalArgumentException("invalid workshop id: " + collectionId);
+        }
+        String raw = postForm(detailsUrl(), "itemcount=1&publishedfileids%5B0%5D="
+                + URLEncoder.encode(collectionId, StandardCharsets.UTF_8));
+        try {
+            return parseChildren(raw);
+        } catch (IllegalArgumentException e) {
+            throw new IOException("malformed Steam API response: " + e.getMessage(), e);
+        }
+    }
+
     private static String postForm(String url, String formBody) throws IOException {
         HttpRequest req = HttpRequest.newBuilder(URI.create(url))
                 .timeout(Duration.ofSeconds(30))
@@ -121,6 +138,53 @@ public final class WorkshopApi {
             long timeUpdated = tu instanceof Number ? ((Number) tu).longValue() : 0L;
             if (id != null && !id.isEmpty() && timeUpdated > 0) {
                 out.put(id, timeUpdated);
+            }
+        }
+        return out;
+    }
+
+    /**
+     * Extracts the {@code children[].publishedfileid} list of the first
+     * publishedfiledetails entry (collections only). Package-private so
+     * tests can run it against captured real responses.
+     *
+     * @throws IllegalArgumentException when the response is not JSON or is
+     *         missing the expected structure.
+     */
+    static List<String> parseChildren(String json) {
+        List<String> out = new java.util.ArrayList<>();
+        final Object root = Json.parse(json); // throws on malformed JSON
+        Map<String, Object> rootObj = Json.object(root);
+        Map<String, Object> response = rootObj == null ? null : Json.object(rootObj.get("response"));
+        if (response == null) {
+            throw new IllegalArgumentException("missing 'response' object");
+        }
+        List<Object> details = Json.array(response.get("publishedfiledetails"));
+        if (details == null || details.isEmpty()) {
+            throw new IllegalArgumentException("missing 'publishedfiledetails' array");
+        }
+        Map<String, Object> first = Json.object(details.get(0));
+        if (first == null) {
+            return out;
+        }
+        List<Object> children = Json.array(first.get("children"));
+        if (children == null) {
+            return out; // not a collection (or no children): not an error
+        }
+        for (Object c : children) {
+            Map<String, Object> m = Json.object(c);
+            if (m == null) {
+                continue;
+            }
+            Object idObj = m.get("publishedfileid");
+            final String id;
+            if (idObj instanceof Number) {
+                id = String.valueOf(((Number) idObj).longValue());
+            } else {
+                id = idObj == null ? null : String.valueOf(idObj);
+            }
+            if (id != null && !id.isEmpty()) {
+                out.add(id);
             }
         }
         return out;

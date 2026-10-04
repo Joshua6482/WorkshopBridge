@@ -73,6 +73,31 @@ public final class Backend {
     }
 
     /**
+     * Writes the given workshop ids as one Steam Workshop URL per line to a
+     * timestamped file under {@code <Zomboid>/workshopbridge-exports/}.
+     * The path is fixed (no file picker): the user is told exactly where it
+     * landed. Returns the exported file's absolute path.
+     */
+    public String exportModList(java.util.List<String> workshopIds) throws java.io.IOException {
+        File dir = new File(zomboidDir, "workshopbridge-exports");
+        if (!dir.isDirectory() && !dir.mkdirs()) {
+            throw new java.io.IOException("cannot create export dir: " + dir);
+        }
+        String stamp = java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss")
+                .withZone(java.time.ZoneId.systemDefault())
+                .format(java.time.Instant.now());
+        File out = new File(dir, "modlist-" + stamp + ".txt");
+        StringBuilder sb = new StringBuilder();
+        for (String wsid : workshopIds) {
+            sb.append("https://steamcommunity.com/sharedfiles/filedetails/?id=")
+                    .append(wsid).append('\n');
+        }
+        java.nio.file.Files.writeString(out.toPath(), sb.toString(),
+                java.nio.charset.StandardCharsets.UTF_8);
+        return out.getAbsolutePath();
+    }
+
+    /**
      * PZ mod id -> workshop id, with some self-healing
      */
     public synchronized String getWorkshopId(String modId) {
