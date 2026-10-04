@@ -126,13 +126,14 @@ function WB_DeleteDialog:onDeleteClicked()
     local deleted = dec.deleted or {}
     print("[WorkshopBridge] deleted " .. tostring(#deleted)
         .. " folder(s) for " .. tostring(modId))
-    if next(skipped) ~= nil then
-        local kept = {}
-        for id, reason in pairs(skipped) do
-            kept[#kept + 1] = tostring(id) .. " (" .. tostring(reason) .. ")"
-            print("[WorkshopBridge] kept " .. tostring(id) .. ": "
-                .. tostring(reason))
-        end
+    -- NOTE: no next() here - the game's Lua environment doesn't provide it
+    local kept = {}
+    for id, reason in pairs(skipped) do
+        kept[#kept + 1] = tostring(id) .. " (" .. tostring(reason) .. ")"
+        print("[WorkshopBridge] kept " .. tostring(id) .. ": "
+            .. tostring(reason))
+    end
+    if #kept > 0 then
         WB_FlashMessage(ms, WB_Text.DeletePartial .. ": "
             .. table.concat(kept, ", "))
     else
