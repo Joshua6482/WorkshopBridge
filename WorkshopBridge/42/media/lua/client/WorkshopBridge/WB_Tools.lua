@@ -49,9 +49,12 @@ end
 
 -- Shared completion handling for import jobs: progress while running, then
 -- hide + flash the summary (or a stuck error) and rescan the mod list so
--- newly installed mods show up. The game mod caches are invalidated each
--- time a download in the batch finishes (not just at the end), so mods
--- that landed early are visible even while later ones still download.
+-- newly installed mods show up. The visible list is rebuilt each time a
+-- download in the batch finishes (not just at the end), so mods that landed
+-- early appear while later ones still download. Note this must be the full
+-- refresh (reloadMods), not just wbInvalidateModCaches: the game only
+-- re-reads its mod list on reload, so invalidating the caches alone never
+-- shows anything new.
 local function WB_TrackImportJob(ms, jobId, what)
     print("[WorkshopBridge] import started (" .. tostring(what)
         .. ", job " .. tostring(jobId) .. ")")
@@ -62,9 +65,7 @@ local function WB_TrackImportJob(ms, jobId, what)
             local done = st and tonumber(st.done) or 0
             if done > lastInvalidated then
                 lastInvalidated = done
-                if type(wbInvalidateModCaches) == "function" then
-                    pcall(wbInvalidateModCaches)
-                end
+                WB_RefreshModList(ms)
             end
         end,
         onDone = function(st)

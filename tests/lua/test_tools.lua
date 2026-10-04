@@ -205,11 +205,14 @@ wbInvalidateModCaches = function()
     return realInvalidate()
 end
 tdlg.entry:setText("111\nhttps://steamcommunity.com/sharedfiles/filedetails/?id=222\n111\njunk\n")
+local reloadedBefore = ms.reloaded or 0
 tdlg.importBtn.onclick()
 check(ms.wbImportTextDialog == nil, "import-text dialog closes on valid input")
 check(importedCsv == "111,222", "import passes deduped ids", tostring(importedCsv))
 tick(200)
-check((ms.reloaded or 0) >= 1, "reloadMods called after text import")
+check((ms.reloaded or 0) - reloadedBefore >= 2,
+    "mod list rebuilt per download, not just at the end",
+    tostring((ms.reloaded or 0) - reloadedBefore))
 check(invalidateCount >= 2,
     "mod caches invalidated per download, not just at the end", invalidateCount)
 wbInvalidateModCaches = realInvalidate
