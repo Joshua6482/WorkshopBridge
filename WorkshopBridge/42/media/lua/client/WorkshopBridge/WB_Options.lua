@@ -14,6 +14,7 @@ local OPT_REFRESH_PER_DOWNLOAD = "RefreshListPerDownload"
 local OPT_CHECK_DEPENDENCIES = "CheckDependenciesAfterDownload"
 local OPT_SERVER_DOWNLOAD_OFFER = "OfferServerModDownloads"
 local OPT_SIDECAR_STAMP = "WriteSidecarStamp"
+local OPT_COLLECTION_IMPORT = "EnableCollectionImport"
 
 local function WB_RegisterOptions()
     if type(PZAPI) ~= "table" or type(PZAPI.ModOptions) ~= "table" then return end
@@ -40,6 +41,10 @@ local function WB_RegisterOptions()
         "Tag mod folders with Workshop info",
         true,
         "Write a small workshopbridge.json file into each installed mod folder recording its Workshop ID. Mods you archive and move back re-link automatically instead of showing as unknown. Turn off if you don't want extra files in your mod folders.")
+    opts:addTickBox(OPT_COLLECTION_IMPORT,
+        "Enable collection import (experimental)",
+        false,
+        "Show the collection import button in More tools, importing every mod in a Steam Workshop collection at once. Still untested in-game; enable it to try it and report back.")
     print("[WorkshopBridge] mod options registered")
 end
 
@@ -80,6 +85,10 @@ end
 -- match OPT_SIDECAR_STAMP.
 function WB_GetWriteSidecarStamp()
     return wbGetTickBox(OPT_SIDECAR_STAMP, true)
+end
+
+function WB_GetEnableCollectionImport()
+    return wbGetTickBox(OPT_COLLECTION_IMPORT, false)
 end
 
 WB_RegisterOptions()
