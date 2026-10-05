@@ -8,6 +8,7 @@
 -- serialized import job.
 require "WorkshopBridge/WB_Config"
 require "WorkshopBridge/WB_Jobs"
+require "WorkshopBridge/WB_Options"
 require "WorkshopBridge/WB_Download"
 
 -- Workshop ids of enabled mods, deduped. A mod counts when its workshop id
@@ -302,11 +303,12 @@ function WB_ToolsDialog:buildControls()
         c:setFont(UIFont.Small)
         self:addChild(c)
     end
-    -- collection import is untested in-game (no small test collection found
-    -- yet); disabled until it can be exercised for real. Re-enable by
-    -- deleting this block.
+    -- Collection import is untested in-game; it stays behind the
+    -- "Enable collection import (experimental)" mod option (off by
+    -- default). Read here, at dialog-open time, so toggling the option
+    -- takes effect without a restart.
     if self.importCollectionBtn.setEnable then
-        self.importCollectionBtn:setEnable(false)
+        self.importCollectionBtn:setEnable(WB_GetEnableCollectionImport())
     end
 end
 

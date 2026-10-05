@@ -157,6 +157,11 @@ check(sidecarOpt ~= nil and sidecarOpt:getValue() == true,
     "sidecar tickbox present, default on")
 check(WB_GetWriteSidecarStamp() == true,
     "sidecar option reads true by default")
+local collectionOpt = registeredOptions:getOption("EnableCollectionImport")
+check(collectionOpt ~= nil and collectionOpt:getValue() == false,
+    "collection import tickbox present, default off")
+check(WB_GetEnableCollectionImport() == false,
+    "collection import option reads false by default")
 -- toggling one does not affect the others
 depsOpt:setValue(false)
 check(WB_GetCheckDependenciesAfterDownload() == false,
@@ -214,7 +219,16 @@ check(tools ~= nil and tools:isVisible(), "tools dialog opens")
 check(tools.exportBtn and tools.importTextBtn and tools.importCollectionBtn,
     "tools dialog has all three tool buttons")
 check(tools.importCollectionBtn.enable == false,
-    "collection import disabled until it can be tested in-game")
+    "collection import disabled by default (option off)")
+-- enabling the experimental option enables the button (no restart: the
+-- dialog reads the option when it opens)
+collectionOpt:setValue(true)
+ms.wbToolsDialog:close()
+ms.wbToolsBtn.onclick()
+check(ms.wbToolsDialog.importCollectionBtn.enable ~= false,
+    "collection import enabled when the option is on")
+collectionOpt:setValue(false)
+ms.wbToolsDialog:close()
 
 -- ---------- export ----------
 local function modInfo(wsid)
