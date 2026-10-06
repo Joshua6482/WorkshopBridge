@@ -38,8 +38,11 @@ public final class Json {
     }
 
     private static final class Parser {
+        /** Max object/array nesting; real Steam payloads nest <10. */
+        static final int MAX_DEPTH = 100;
         final String s;
         int pos;
+        int depth;
 
         Parser(String s) {
             this.s = s;
@@ -71,8 +74,20 @@ public final class Json {
             }
             char c = s.charAt(pos);
             switch (c) {
-                case '{': return parseObject();
-                case '[': return parseArray();
+                case '{':
+                case '[':
+                    // Cap nesting depth: legitimate Steam responses nest only a
+                    // handful of levels, so anything this deep is hostile input
+                    // trying to blow the stack. Rejected like any malformed JSON.
+                    if (depth >= MAX_DEPTH) {
+                        throw err("nesting too deep");
+                    }
+                    depth++;
+                    try {
+                        return c == '{' ? parseObject() : parseArray();
+                    } finally {
+                        depth--;
+                    }
                 case '"': return parseString();
                 case 't': expect("true"); return Boolean.TRUE;
                 case 'f': expect("false"); return Boolean.FALSE;

@@ -244,6 +244,15 @@ public class WBTest {
             threw2 = true;
         }
         check(threw2, "json trailing data throws");
+        String deepOk = "[".repeat(90) + "]".repeat(90);
+        check(Json.parse(deepOk) != null, "json 90-deep nesting parses");
+        boolean threwDeep = false;
+        try {
+            Json.parse("[".repeat(200) + "]".repeat(200));
+        } catch (IllegalArgumentException e) {
+            threwDeep = true;
+        }
+        check(threwDeep, "json 200-deep nesting rejected");
 
         // ---- 2. Net messages ----
         // ---- 2b. parse a REAL captured Steam API response ----
@@ -508,7 +517,11 @@ public class WBTest {
         // ...and the commented template parses to "no override"
         File bareDir = scratchDir(zomboidDir, "wb-props-bare");
         new SteamCmd(bareDir); // creates the template
-        check(new SteamCmd(bareDir).findExecutable() == null,
+        SteamCmd bareCmd = new SteamCmd(bareDir);
+        // the shared ~/.cache fallback dir must not leak a real steamcmd
+        // into this check (it exists on dev machines that bootstrapped one)
+        bareCmd.fallbackDirForTest = new File(bareDir, "empty-cache");
+        check(bareCmd.findExecutable() == null,
                 "template with empty steamcmd.path -> no override");
         check(fakeExe.equals(backend.steamCmd().findExecutable()),
                 "BOM in properties file does not drop steamcmd.path",
@@ -516,8 +529,18 @@ public class WBTest {
         Files.writeString(props.toPath(), "steamcmd.path=" + fakeExe + "\n");
 
         // ---- 4. check job with a stub Steam API: 111 updated, 222 gone ----
-        HttpServer api = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
-        int apiPort = api.getAddress().getPort();
+        // Fixed loopback port so a firewall "always allow 127.0.0.1"
+        // approval sticks between runs (an ephemeral port looks like a new
+        // site every run and re-prompts). Falls back to ephemeral when taken.
+        HttpServer api;
+        int apiPort;
+        try {
+            api = HttpServer.create(new InetSocketAddress("127.0.0.1", 18080), 0);
+            apiPort = 18080;
+        } catch (java.net.BindException e) {
+            api = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+            apiPort = api.getAddress().getPort();
+        }
         AtomicReference<String> apiJson = new AtomicReference<>(
                 "{\"response\":{\"publishedfiledetails\":["
                 + "{\"publishedfileid\":\"111\",\"time_updated\":2000,"
@@ -545,8 +568,7 @@ public class WBTest {
         // not cached at class-load: the fixture test above already exercised
         // WorkshopApi.parseTimeUpdated, which would otherwise freeze the URL
         // to the real Steam API and send every "stubbed" check at real
-        // workshop items). Binding port 0 above means run.sh needs no
-        // free-port hack (and no python3).
+        // workshop items).
         System.setProperty("workshopbridge.steamApiUrl",
                 "http://127.0.0.1:" + apiPort + "/");
         JobManager jobs = new JobManager(backend);
@@ -1292,8 +1314,13 @@ public class WBTest {
         check(partial != null && partial.modIds.equals(List.of("StillHere"))
                         && partial.timeUpdated == 7777L,
                 "partial entry loses only the missing mod id");
-        // installed entries are untouched
-        check("111".equals(backend.workshopMap().getWorkshopId("ModA")),
+        // installed entries are untouched: 111 still maps to whichever mod
+        // is current (FakeMod-111 after the live update-all above, ModA when
+        // the live HTTP tests were skipped for lack of loopback), and the
+        // reconciles just run did not prune it
+        List<String> ids111 = backend.workshopMap().snapshot().get("111").modIds;
+        check(!ids111.isEmpty() && "111".equals(
+                        backend.workshopMap().getWorkshopId(ids111.get(0))),
                 "installed entry survives reconcile");
         // removeModIds edge cases
         backend.workshopMap().removeModIds("no-such-item", List.of("X"));

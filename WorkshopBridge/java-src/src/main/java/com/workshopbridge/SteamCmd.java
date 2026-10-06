@@ -233,12 +233,18 @@ public final class SteamCmd {
     private List<File> steamCmdDirs() {
         List<File> dirs = new ArrayList<>();
         dirs.add(primarySteamCmdDir());
-        File fb = fallbackSteamCmdDir();
+        // Test seam: when set, replaces the shared ~/.cache fallback dir so
+        // tests never resolve the user's real steamcmd. Package-private;
+        // tests live in the same package.
+        File fb = fallbackDirForTest != null ? fallbackDirForTest : fallbackSteamCmdDir();
         if (!fb.equals(primarySteamCmdDir())) {
             dirs.add(fb);
         }
         return dirs;
     }
+
+    /** See above. Null means "use the real shared fallback dir". */
+    File fallbackDirForTest = null;
 
     /**
      * Returns a working steamcmd path, bootstrapping one from Valve's CDN when
