@@ -24,6 +24,17 @@ set -euo pipefail
 cd "$(dirname "$0")"  # repo root
 SRC="WorkshopBridge/java-src"
 
+# Sandbox fallback: this dev VM keeps a JDK under ~/.tools without putting it
+# on PATH. Pick it up automatically so the scripts just work there.
+if ! command -v javac >/dev/null 2>&1; then
+    for cand in "$HOME"/workspace/.tools/jdk-*/bin; do
+        if [ -x "$cand/javac" ] && [ -x "$cand/java" ]; then
+            export PATH="$cand:$PATH"
+            break
+        fi
+    done
+fi
+
 for tool in javac java jar; do
     if ! command -v "$tool" >/dev/null 2>&1; then
         echo "error: '$tool' not found on PATH. Install a JDK 17+ first, e.g.:" >&2
