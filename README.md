@@ -18,10 +18,5 @@ A Lua UI in the Mods menu ("Check for updates", "Update all", per-mod "Update", 
 - [Architecture](docs/ARCHITECTURE.md) - Lua/Java contract, data flows, map format, how the check/update/download/adopt flows work
 - [Testing](docs/TESTING.md) - how to run the offline suites and the online smoke test
 
-## License
 
-MIT, see [LICENSE](LICENSE).
-
----
-
-Disclaimer: Vibecoded, Most of the source code manually reviewed and tweaked, but still. 
+**Disclaimer:** Vibecoded, Most of the source code manually reviewed and tweaked, but still. 

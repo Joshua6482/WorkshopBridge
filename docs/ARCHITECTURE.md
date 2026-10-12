@@ -198,9 +198,3 @@ Via the vanilla `PZAPI.ModOptions` system, persisted to `ModOptions.ini`:
 - Row states (three): in our map → per-mod button (+ "Update available" badge after a check); game's `getWorkshopID()` non-empty → "Managed by Steam"; else grey "Unknown workshop ID".
 - Wrapping is idempotent per instance and re-applied by `WB_RefreshModList` after update-all, per-mod update, and download reloads.
 - **Server-join prompt** (not yet verified in-game): `WB_ServerJoin` hooks `Events.OnConnectFailed` and parents its dialog to the visible `ConnectToServer` screen (vanilla shows failures as label text there, not a modal).
-
-## Design constraints
-
-- **B42 only**
-- **Zero bytecode patches**: we use only ZombieBuddy's Lua-exposure surface, its most stable API.
-- **Never store Steam credentials.** Anonymous steamcmd login only.
