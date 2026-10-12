@@ -491,6 +491,7 @@ public class WBTest {
         String fakeExe = new File(System.getProperty("wb.test.fakebin"),
                 "steamcmd.sh").getAbsolutePath();
         Files.writeString(props.toPath(), "steamcmd.path=" + fakeExe + "\n");
+
         // BOM variant: Windows Notepad saves UTF-8 with a BOM; the override
         // must still be honored, not silently dropped
         byte[] bom = {(byte) 0xEF, (byte) 0xBB, (byte) 0xBF};
@@ -527,6 +528,48 @@ public class WBTest {
                 "BOM in properties file does not drop steamcmd.path",
                 backend.steamCmd().findExecutable());
         Files.writeString(props.toPath(), "steamcmd.path=" + fakeExe + "\n");
+
+        // ---- 3b. steamcmd download location: some builds ignore
+        // +force_install_dir for workshop downloads and drop the item next
+        // to the executable instead (seen on Windows). locateDownloadedItem
+        // must find it wherever it landed.
+        File dlBase = scratchDir(zomboidDir, "wb-dl-loc");
+        File expectedDir = new File(dlBase,
+                "cache/steamapps/workshop/content/108600/3810346562");
+        File exeRelDir = new File(dlBase,
+                "exedir/steamapps/workshop/content/108600/3810346562");
+        // Windows-style steamcmd output, as seen in the wild
+        String winOut = "Downloading item 3810346562 ...\n"
+                + "Success. Downloaded item 3810346562 to \"C:\\wb\\steamcmd\\steamapps\\workshop\\content\\108600\\3810346562\" (35254 bytes) Unloading Steam API...OK\n";
+        File reported = SteamCmd.parseDownloadedPath(winOut, "3810346562");
+        check(reported != null && reported.getPath().endsWith("3810346562"),
+                "parseDownloadedPath reads steamcmd's reported path", reported);
+        check(SteamCmd.parseDownloadedPath("nothing here", "3810346562") == null,
+                "parseDownloadedPath null when no download line");
+        check(SteamCmd.parseDownloadedPath(winOut, "999") == null,
+                "parseDownloadedPath ignores other item ids");
+        check(SteamCmd.locateDownloadedItem(expectedDir, exeRelDir, winOut,
+                "3810346562") == null,
+                "locateDownloadedItem null when no mods/ anywhere");
+        new File(exeRelDir, "mods").mkdirs();
+        check(exeRelDir.equals(SteamCmd.locateDownloadedItem(expectedDir, exeRelDir,
+                winOut, "3810346562")),
+                "locateDownloadedItem finds exe-relative download");
+        new File(expectedDir, "mods").mkdirs();
+        check(expectedDir.equals(SteamCmd.locateDownloadedItem(expectedDir, exeRelDir,
+                winOut, "3810346562")),
+                "locateDownloadedItem prefers the force_install_dir location");
+        // reported path branch: neither candidate has mods/, output points
+        // at a real dir that does
+        File dlBase2 = scratchDir(zomboidDir, "wb-dl-loc2");
+        File reportedDir = new File(dlBase2, "reported/3810346562");
+        new File(reportedDir, "mods").mkdirs();
+        String out2 = "Success. Downloaded item 3810346562 to \""
+                + reportedDir.getAbsolutePath() + "\" (1 bytes)\n";
+        check(reportedDir.equals(SteamCmd.locateDownloadedItem(
+                new File(dlBase2, "cache"), new File(dlBase2, "exedir"),
+                out2, "3810346562")),
+                "locateDownloadedItem uses steamcmd's reported path");
 
         // ---- 4. check job with a stub Steam API: 111 updated, 222 gone ----
         // Fixed loopback port so a firewall "always allow 127.0.0.1"

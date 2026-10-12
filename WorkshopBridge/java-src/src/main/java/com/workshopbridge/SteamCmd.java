@@ -272,8 +272,11 @@ public final class SteamCmd {
     }
 
     /**
-     * Downloads a workshop item. Files land in
-     * {@code <cacheDir>/steamapps/workshop/content/108600/<workshopId>/}.
+     * Downloads a workshop item. Files normally land in
+     * {@code <cacheDir>/steamapps/workshop/content/108600/<workshopId>/},
+     * but some steamcmd builds ignore {@code +force_install_dir} for workshop
+     * downloads and drop the item next to the executable instead; both
+     * locations are wiped beforehand and searched afterwards.
      * Returns the item directory (which contains {@code mods/}).
      */
     public File download(String workshopId, File cacheDir, Consumer<String> log) throws IOException {
@@ -287,12 +290,20 @@ public final class SteamCmd {
         }
         File itemDir = new File(cacheDir,
                 "steamapps/workshop/content/" + APP_ID + "/" + workshopId);
+        // Some steamcmd builds ignore +force_install_dir for workshop
+        // downloads and put the item next to the executable instead
+        // (observed on Windows: <cacheDir>/steamcmd/steamapps/...).
+        File exeItemDir = new File(new File(exe).getParentFile(),
+                "steamapps/workshop/content/" + APP_ID + "/" + workshopId);
         // Start from a clean item dir: steamcmd does not reliably remove
         // files the author deleted from the item, and a stale cache would
         // otherwise be installed (and recorded) as if it were current.
         // A failed download still fails loudly on its exit code below, so
         // wiping first can never install old content as fresh.
         ModInstaller.deleteRecursiveQuiet(itemDir.toPath(), log);
+        if (!exeItemDir.equals(itemDir)) {
+            ModInstaller.deleteRecursiveQuiet(exeItemDir.toPath(), log);
+        }
         List<String> cmd = new ArrayList<>(LAUNCH_PREFIX);
         cmd.add(exe);
         // NB: +force_install_dir must come before +login, or steamcmd errors out.
@@ -362,12 +373,11 @@ public final class SteamCmd {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
-        File modsDir = new File(itemDir, "mods");
-        String tail;
+        String out;
         synchronized (output) {
-            String o = output.toString();
-            tail = o.substring(Math.max(0, o.length() - 2000));
+            out = output.toString();
         }
+        String tail = out.substring(Math.max(0, out.length() - 2000));
         int exit = p.exitValue();
         if (exit != 0) {
             // never trust a stale cache dir: a failed update must not
@@ -375,11 +385,50 @@ public final class SteamCmd {
             throw new IOException("steamcmd failed for " + workshopId
                     + " (exit=" + exit + "). Output tail:\n" + tail);
         }
-        if (!modsDir.isDirectory()) {
+        File found = locateDownloadedItem(itemDir, exeItemDir, out, workshopId);
+        if (found == null) {
             throw new IOException("steamcmd produced no mods/ for " + workshopId
                     + " (exit=" + exit + "). Output tail:\n" + tail);
         }
-        return itemDir;
+        return found;
+    }
+
+    /**
+     * Finds the directory steamcmd actually downloaded into. The expected
+     * {@code itemDir} (under {@code +force_install_dir}) is checked first so
+     * behavior is unchanged where steamcmd honors it; then the exact path
+     * steamcmd prints itself ({@code Downloaded item <id> to "<path>"}),
+     * then the executable-relative location some builds use instead.
+     * Package-private for tests.
+     */
+    static File locateDownloadedItem(File itemDir, File exeItemDir,
+            String steamcmdOutput, String workshopId) {
+        if (new File(itemDir, "mods").isDirectory()) {
+            return itemDir;
+        }
+        File reported = parseDownloadedPath(steamcmdOutput, workshopId);
+        if (reported != null && new File(reported, "mods").isDirectory()) {
+            return reported;
+        }
+        if (!exeItemDir.equals(itemDir)
+                && new File(exeItemDir, "mods").isDirectory()) {
+            return exeItemDir;
+        }
+        return null;
+    }
+
+    /**
+     * Parses steamcmd's {@code Success. Downloaded item <id> to "<path>"}
+     * line. Package-private for tests.
+     */
+    static File parseDownloadedPath(String steamcmdOutput, String workshopId) {
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile(
+                "Downloaded item " + workshopId + " to \"([^\"]+)\"")
+                .matcher(steamcmdOutput);
+        if (m.find()) {
+            return new File(m.group(1));
+        }
+        return null;
     }
 
     // ------------------------------------------------------------------
