@@ -173,13 +173,14 @@ Built for non-Steam (GOG) players.
 2. Copy the \`WorkshopBridge\` folder from \`WorkshopBridge-$VERSION.zip\`
    into the \`mods\` folder inside your Zomboid folder
    (\`~/Zomboid/mods\` on Linux, \`%USERPROFILE%\\Zomboid\\mods\` on Windows).
-3. Enable it in the Mods menu like any other mod.
+3. Enable it in the Mods menu.
 
 ## Verify this download
 
 - Zip SHA-256: \`$ZIP_SHA\`
+- Jar SHA-256: \`$JAR_SHA\`
 - [VirusTotal]($VT_LINK)
-- Jar SHA-256: \`$JAR_SHA\` (ZBS-signed; see [ModSigning](https://github.com/zed-0xff/ZombieBuddy/blob/master/doc/ModSigning.md))
+- ZBS-signed; see [ModSigning](https://github.com/zed-0xff/ZombieBuddy/blob/master/doc/ModSigning.md)
 EOF
 
 echo
