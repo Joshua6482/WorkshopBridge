@@ -618,7 +618,7 @@ public class WBTest {
         Files.writeString(new File(mgStaging, "sub/old.txt").toPath(), "new-sub");
         Files.writeString(new File(mgStaging, "added.txt").toPath(), "new-added");
         ModInstaller.mergeInPlace(mgStaging.toPath(), mgDest.toPath(),
-                "123", "TestMod", 999L, true, s -> {});
+                "123", "TestMod", 999L, true);
         check("new-keep".equals(Files.readString(
                 new File(mgDest, "keep.txt").toPath())),
                 "mergeInPlace overwrites changed files");

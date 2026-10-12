@@ -15,9 +15,11 @@ import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Consumer;
 
 /**
@@ -130,7 +132,19 @@ public final class ModInstaller {
         boolean hadDest = Files.exists(dest);
         try {
             if (hadDest) {
-                moveAtomic(dest, backup);
+                try {
+                    moveAtomic(dest, backup);
+                } catch (AccessDeniedException e) {
+                    // Windows: the game watches live mod dirs, so renaming
+                    // one fails with AccessDeniedException while the game
+                    // runs. Merge the update into the live tree instead of
+                    // swapping directories; see mergeInPlace.
+                    log.accept("Mod dir is locked by the game (" + e.getMessage()
+                            + "); merging the update in place instead of swapping");
+                    mergeInPlace(staging, dest, workshopId, modId, timeUpdated,
+                            writeSidecar);
+                    return;
+                }
             }
             try {
                 moveAtomic(staging, dest);
@@ -193,6 +207,72 @@ public final class ModInstaller {
             Thread.sleep(ms);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
+        }
+    }
+
+    /**
+     * Updates the live mod tree in place from the staging tree, without
+     * renaming the live dir itself: copy new/changed files over, delete
+     * files the update dropped, stamp the sidecar last. Used when the live
+     * dir cannot be renamed (on Windows the game watches mod dirs, so the
+     * rename fails with AccessDeniedException while the game runs).
+     *
+     * Not atomic: a crash mid-merge leaves a mixed tree. The sidecar is
+     * written last so an interrupted merge keeps the old stamp, still looks
+     * outdated, and the next update repairs it.
+     * Package-private for tests.
+     */
+    static void mergeInPlace(Path staging, Path dest,
+            String workshopId, String modId, long timeUpdated,
+            boolean writeSidecar) throws IOException {
+        // 1. copy new/changed files over; the sidecar is stamped last
+        Files.walkFileTree(staging, new SimpleFileVisitor<>() {
+            @Override
+            public FileVisitResult preVisitDirectory(Path dir,
+                    BasicFileAttributes attrs) throws IOException {
+                Files.createDirectories(dest.resolve(staging.relativize(dir)));
+                return FileVisitResult.CONTINUE;
+            }
+
+            @Override
+            public FileVisitResult visitFile(Path file,
+                    BasicFileAttributes attrs) throws IOException {
+                if (file.getFileName().toString().equals(ModSidecar.FILE_NAME)) {
+                    return FileVisitResult.CONTINUE;
+                }
+                Path target = dest.resolve(staging.relativize(file));
+                try {
+                    Files.copy(file, target, StandardCopyOption.REPLACE_EXISTING,
+                            StandardCopyOption.COPY_ATTRIBUTES);
+                } catch (IOException e) {
+                    // attribute copy can fail across filesystems; content matters most
+                    Files.copy(file, target, StandardCopyOption.REPLACE_EXISTING);
+                }
+                return FileVisitResult.CONTINUE;
+            }
+        });
+        // 2. delete files/dirs the update dropped
+        Set<Path> staged = new HashSet<>();
+        try (var stream = Files.walk(staging)) {
+            stream.forEach(p -> staged.add(staging.relativize(p)));
+        }
+        try (var stream = Files.walk(dest)) {
+            for (Path p : stream.sorted(Comparator.reverseOrder()).toList()) {
+                Path rel = dest.relativize(p);
+                if (rel.toString().isEmpty() || staged.contains(rel)) {
+                    continue;
+                }
+                if (p.getFileName().toString().equals(ModSidecar.FILE_NAME)) {
+                    continue; // re-stamped (or removed) below
+                }
+                Files.delete(p);
+            }
+        }
+        // 3. stamp last, so an interrupted merge still looks outdated
+        if (writeSidecar && workshopId != null && !workshopId.isBlank()) {
+            ModSidecar.write(dest.toFile(), workshopId, modId, timeUpdated);
+        } else {
+            Files.deleteIfExists(dest.resolve(ModSidecar.FILE_NAME));
         }
     }
 
