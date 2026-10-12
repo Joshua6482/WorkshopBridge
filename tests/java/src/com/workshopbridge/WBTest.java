@@ -571,6 +571,20 @@ public class WBTest {
                 out2, "3810346562")),
                 "locateDownloadedItem uses steamcmd's reported path");
 
+        // ---- 3c. moveAtomicOnce moves a tree, falling back to a plain move
+        // when ATOMIC_MOVE is refused (on Windows it can throw
+        // AccessDeniedException where a plain move succeeds). Same
+        // filesystem here, so this exercises the normal path end to end.
+        File xBase = scratchDir(zomboidDir, "wb-xmove");
+        File xSrc = new File(xBase, "src");
+        xSrc.mkdirs();
+        Files.writeString(new File(xSrc, "f.txt").toPath(), "x");
+        File xDst = new File(xBase, "moved");
+        ModInstaller.moveAtomicOnce(xSrc.toPath(), xDst.toPath());
+        check(xDst.isDirectory() && new File(xDst, "f.txt").isFile()
+                && !xSrc.exists(),
+                "moveAtomicOnce moves the tree (atomic or fallback)");
+
         // ---- 4. check job with a stub Steam API: 111 updated, 222 gone ----
         // Fixed loopback port so a firewall "always allow 127.0.0.1"
         // approval sticks between runs (an ephemeral port looks like a new

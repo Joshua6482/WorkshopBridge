@@ -5,6 +5,7 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.AtomicMoveNotSupportedException;
+import java.nio.file.AccessDeniedException;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -160,11 +161,7 @@ public final class ModInstaller {
         IOException last = null;
         for (int i = 0; i < 3; i++) {
             try {
-                try {
-                    Files.move(from, to, StandardCopyOption.ATOMIC_MOVE);
-                } catch (AtomicMoveNotSupportedException e) {
-                    Files.move(from, to);
-                }
+                moveAtomicOnce(from, to);
                 return;
             } catch (IOException e) {
                 last = e;
@@ -172,6 +169,23 @@ public final class ModInstaller {
             }
         }
         throw last;
+    }
+
+    /**
+     * One move attempt: atomic first, plain fallback. On Windows ATOMIC_MOVE
+     * can throw AccessDeniedException where a plain move succeeds (observed
+     * backing up an existing mod dir during an update); the backup/rollback
+     * logic in {@link #atomicReplace} does not need the move itself to be
+     * atomic, and {@link #recoverInterruptedInstalls} cleans up a
+     * half-moved tree on the next run, so fall back instead of failing.
+     * Package-private for tests.
+     */
+    static void moveAtomicOnce(Path from, Path to) throws IOException {
+        try {
+            Files.move(from, to, StandardCopyOption.ATOMIC_MOVE);
+        } catch (AtomicMoveNotSupportedException | AccessDeniedException e) {
+            Files.move(from, to);
+        }
     }
 
     private static void sleepQuiet(long ms) {
