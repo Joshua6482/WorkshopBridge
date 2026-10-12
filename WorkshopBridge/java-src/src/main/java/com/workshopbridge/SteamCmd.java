@@ -382,15 +382,32 @@ public final class SteamCmd {
         if (exit != 0) {
             // never trust a stale cache dir: a failed update must not
             // install the previous download as if it were fresh
-            throw new IOException("steamcmd failed for " + workshopId
-                    + " (exit=" + exit + "). Output tail:\n" + tail);
+            throw new IOException(failureMessage(
+                    "steamcmd failed for " + workshopId, exit, out));
         }
         File found = locateDownloadedItem(itemDir, exeItemDir, out, workshopId);
         if (found == null) {
-            throw new IOException("steamcmd produced no mods/ for " + workshopId
-                    + " (exit=" + exit + "). Output tail:\n" + tail);
+            throw new IOException(failureMessage(
+                    "steamcmd produced no mods/ for " + workshopId, exit, out));
         }
         return found;
+    }
+
+    /**
+     * Builds the failure message for a steamcmd run. When steamcmd's own
+     * output names the cause, it leads the message in plain English: the UI
+     * only shows the first line of a job error (WB_ShortError), so a bare
+     * {@code exit=5} tells the user nothing. The output tail stays appended
+     * for the log. Package-private for tests.
+     */
+    static String failureMessage(String summary, int exit, String out) {
+        String tail = out.substring(Math.max(0, out.length() - 2000));
+        String head = summary;
+        if (out.toLowerCase(Locale.ROOT).contains("(no connection)")) {
+            head = "No connection: " + summary
+                    + ". Check your internet connection and try again.";
+        }
+        return head + " (exit=" + exit + "). Output tail:\n" + tail;
     }
 
     /**

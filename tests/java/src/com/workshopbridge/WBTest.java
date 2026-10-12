@@ -571,6 +571,25 @@ public class WBTest {
                 out2, "3810346562")),
                 "locateDownloadedItem uses steamcmd's reported path");
 
+        // failureMessage: the UI shows only the first line, so a
+        // connection failure must lead with plain English, not exit=5
+        String noConnOut = "Connecting anonymously to Steam Public...Retrying...\n"
+                + "FAILED (No Connection)\n";
+        String noConnMsg = SteamCmd.failureMessage(
+                "steamcmd failed for 3810346562", 5, noConnOut);
+        check(noConnMsg.startsWith("No connection: steamcmd failed for 3810346562."),
+                "failureMessage leads with No connection", noConnMsg);
+        check(noConnMsg.split("\n")[0].length() <= 120,
+                "failureMessage first line fits the UI limit");
+        String errOut = "ERROR! Download item 3810346562 failed (No Connection)\n";
+        check(SteamCmd.failureMessage("steamcmd failed for 3810346562", 5, errOut)
+                        .startsWith("No connection:"),
+                "failureMessage catches the download-phase wording");
+        String otherMsg = SteamCmd.failureMessage(
+                "steamcmd failed for 3810346562", 5, "some other failure\n");
+        check(otherMsg.startsWith("steamcmd failed for 3810346562 (exit=5)."),
+                "failureMessage unchanged without the marker", otherMsg);
+
         // ---- 3c. moveAtomicOnce moves a tree, falling back to a plain move
         // when ATOMIC_MOVE is refused (on Windows it can throw
         // AccessDeniedException where a plain move succeeds). Same
@@ -584,6 +603,38 @@ public class WBTest {
         check(xDst.isDirectory() && new File(xDst, "f.txt").isFile()
                 && !xSrc.exists(),
                 "moveAtomicOnce moves the tree (atomic or fallback)");
+
+        // ---- 3d. mergeInPlace: in-place update without renaming the live
+        // dir (the Windows fallback when the game watches the mod dir).
+        File mgBase = scratchDir(zomboidDir, "wb-merge");
+        File mgDest = new File(mgBase, "dest");
+        File mgStaging = new File(mgBase, "staging");
+        new File(mgDest, "sub").mkdirs();
+        new File(mgStaging, "sub").mkdirs();
+        Files.writeString(new File(mgDest, "keep.txt").toPath(), "old-keep");
+        Files.writeString(new File(mgDest, "drop.txt").toPath(), "old-drop");
+        Files.writeString(new File(mgDest, "sub/old.txt").toPath(), "old-sub");
+        Files.writeString(new File(mgStaging, "keep.txt").toPath(), "new-keep");
+        Files.writeString(new File(mgStaging, "sub/old.txt").toPath(), "new-sub");
+        Files.writeString(new File(mgStaging, "added.txt").toPath(), "new-added");
+        ModInstaller.mergeInPlace(mgStaging.toPath(), mgDest.toPath(),
+                "123", "TestMod", 999L, true, s -> {});
+        check("new-keep".equals(Files.readString(
+                new File(mgDest, "keep.txt").toPath())),
+                "mergeInPlace overwrites changed files");
+        check(!new File(mgDest, "drop.txt").exists(),
+                "mergeInPlace deletes dropped files");
+        check("new-sub".equals(Files.readString(
+                new File(mgDest, "sub/old.txt").toPath())),
+                "mergeInPlace updates nested files");
+        check("new-added".equals(Files.readString(
+                new File(mgDest, "added.txt").toPath())),
+                "mergeInPlace adds new files");
+        Map<String, Object> mgStamp = Json.object(Json.parse(Files.readString(
+                new File(mgDest, "workshopbridge.json").toPath())));
+        check(mgStamp != null && "123".equals(mgStamp.get("workshopId"))
+                && Long.valueOf(999L).equals(mgStamp.get("timeUpdated")),
+                "mergeInPlace stamps the sidecar", mgStamp);
 
         // ---- 4. check job with a stub Steam API: 111 updated, 222 gone ----
         // Fixed loopback port so a firewall "always allow 127.0.0.1"
