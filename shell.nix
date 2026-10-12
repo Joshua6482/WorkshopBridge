@@ -6,6 +6,7 @@ pkgs.mkShell {
     gradle
     zulu25
     openssl_3_5
+    gh
   ];
 
   shellHook = ''
