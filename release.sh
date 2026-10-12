@@ -180,7 +180,7 @@ Built for non-Steam (GOG) players.
 - Zip SHA-256: \`$ZIP_SHA\`
 - Jar SHA-256: \`$JAR_SHA\`
 - [VirusTotal]($VT_LINK)
-- ZBS-signed; see [ModSigning](https://github.com/zed-0xff/ZombieBuddy/blob/master/doc/ModSigning.md)
+- ZBS-signed; see [ModSigning](https://github.com/zed-0xff/ZombieBuddy/blob/master/doc/ModSigning.md#what-signing-proves)
 EOF
 
 echo
