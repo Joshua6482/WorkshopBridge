@@ -175,15 +175,11 @@ Built for non-Steam (GOG) players.
    (\`~/Zomboid/mods\` on Linux, \`%USERPROFILE%\\Zomboid\\mods\` on Windows).
 3. Enable it in the Mods menu like any other mod.
 
-The Java sources ship inside the zip under \`java-src/\` (the game ignores
-that folder), so anyone can audit or rebuild the jar.
-
 ## Verify this download
 
 - Zip SHA-256: \`$ZIP_SHA\`
-- VirusTotal: $VT_LINK
-  (shows a scan report once the file has been uploaded there at least once)
-- Jar SHA-256: \`$JAR_SHA\` (ZBS-signed; see WorkshopBridge.jar.zbs)
+- [VirusTotal]($VT_LINK)
+- Jar SHA-256: \`$JAR_SHA\` (ZBS-signed; see [ModSigning](https://github.com/zed-0xff/ZombieBuddy/blob/master/doc/ModSigning.md))
 EOF
 
 echo
