@@ -9,6 +9,12 @@ for a in "$@"; do
   if [ "$prev" = "108600" ]; then ID="$a"; fi
   prev="$a"
 done
+if [ -z "$ID" ]; then
+  # no download requested (e.g. the backend's `<exe> +quit` validation
+  # probe): identify as steamcmd and exit before touching the filesystem
+  echo "Steam Console Client"
+  exit 0
+fi
 MODDIR="$CACHE/steamapps/workshop/content/108600/$ID/mods/FakeMod-$ID/common"
 if [ "$ID" = "0" ]; then
   # failure mode for tests: exit nonzero without producing any files
