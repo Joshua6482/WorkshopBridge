@@ -2,6 +2,13 @@
 -- Handles objects, arrays, strings (with escapes incl. \uXXXX), numbers,
 -- true/false/null. Only what WorkshopBridge needs (decoding job status).
 
+-- Sentinel for JSON null inside arrays. Lua has no nil array slot, so a
+-- decoded null would shift every later index; it becomes this table
+-- instead. (Object nulls still drop the key, as before.) There is no Lua
+-- encoder in this module; the Java side never emits nulls in the shapes
+-- Lua consumes, so no shipped code path can observe the sentinel today.
+WB_JSON_NULL = {}
+
 function WB_JsonDecode(s)
     local pos = 1
     local function err(msg)
@@ -93,7 +100,9 @@ function WB_JsonDecode(s)
         if s:sub(pos, pos) == "]" then pos = pos + 1 return arr end
         while true do
             local v = parseValue()
-            if v ~= nil then arr[#arr + 1] = v end
+            -- parseValue returns nil only for JSON null; keep the slot so
+            -- later indices don't shift (see WB_JSON_NULL)
+            arr[#arr + 1] = (v == nil) and WB_JSON_NULL or v
             skipWs()
             local c = s:sub(pos, pos)
             pos = pos + 1

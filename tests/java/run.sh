@@ -8,7 +8,7 @@
 #
 # Run from anywhere:  ./tests/java/run.sh
 set -u
-cd "$(dirname "$0")"  # tests/java
+cd "$(dirname "$0")" || exit 1  # tests/java (guarded: rm -rf "$WORK" below must not run elsewhere)
 HERE="$PWD"
 REPO="$(cd ../.. && pwd)"
 
@@ -32,6 +32,9 @@ for tool in javac java; do
         exit 1
     fi
 done
+# tar is undeclared but required (archive tests, sections 11/11b)
+command -v tar >/dev/null 2>&1 \
+    || { echo "error: 'tar' not found on PATH (needed by the archive tests)." >&2; exit 1; }
 JH_BIN="$(dirname "$(command -v javac)")"
 
 WORK="$HERE/.test-work"
@@ -39,9 +42,10 @@ rm -rf "$WORK"
 mkdir -p "$WORK/classes" "$WORK/zomboid"
 
 echo "compiling..."
-"$JH_BIN/javac" -d "$WORK/classes" \
-    $(find stubs src -name "*.java") \
-    "$REPO/WorkshopBridge/java-src/src/main/java/com/workshopbridge/"*.java \
+# find -print0 | xargs -0: no word-splitting hazards from $(find ...)
+find stubs src -name "*.java" -print0 \
+    | xargs -0 "$JH_BIN/javac" -d "$WORK/classes" \
+        "$REPO/WorkshopBridge/java-src/src/main/java/com/workshopbridge/"*.java \
     || exit 1
 
 echo "running tests..."

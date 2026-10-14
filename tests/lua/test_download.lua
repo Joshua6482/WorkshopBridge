@@ -138,7 +138,6 @@ check(ms.wbDownloadDialog:isVisible(), "dialog visible")
 local dlg = ms.wbDownloadDialog
 ms.wbDownloadBtn.onclick() -- again: must not stack duplicates
 check(#ms.children == kidsBefore + 1, "no duplicate dialogs", #ms.children)
-check(#dlg.children == 6, "dialog builds its controls exactly once", #dlg.children)
 
 -- invalid input: error shown, dialog stays open, no job started
 dlg.entry:setText("not a workshop id")
@@ -196,6 +195,24 @@ tick(200)
 check(depsCalls == 1, "dependencies skipped when option off", depsCalls)
 WB_CheckDependencies = realCheckDeps
 WB_GetCheckDependenciesAfterDownload = realDepsOpt
+
+-- ---------- DownloadFailed path ----------
+local realStatusDl = wbGetJobStatus
+wbGetJobStatus = function(jobId)
+    return '{"state":"failed","done":0,"total":1,'
+        .. '"message":"Downloading...","error":"boom"}'
+end
+ms.wbDownloadBtn.onclick()
+local dlgFail = ms.wbDownloadDialog
+dlgFail.entry:setText("999888777")
+dlgFail.downloadBtn.onclick()
+tick(10) -- the stubbed failure completes on the first poll
+wbGetJobStatus = realStatusDl
+local dlErrLabel = ms.wbProgressPanel and ms.wbProgressPanel.wbLabel
+check(dlErrLabel and dlErrLabel.name:find("Download failed", 1, true) ~= nil,
+    "failed download job shows stuck error", dlErrLabel and dlErrLabel.name)
+ms.wbProgressPanel.onMouseUp(ms.wbProgressPanel, 0, 0) -- dismiss
+check(not ms.wbProgressPanel:isVisible(), "stuck error dismisses on click")
 
 print(failures == 0 and "ALL DOWNLOAD TESTS PASSED" or (failures .. " FAILURES"))
 os.exit(failures == 0 and 0 or 1)

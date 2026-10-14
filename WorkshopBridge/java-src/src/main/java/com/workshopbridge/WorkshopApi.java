@@ -129,33 +129,37 @@ public final class WorkshopApi {
      */
     static Map<String, Long> parseTimeUpdated(String json) {
         Map<String, Long> out = new LinkedHashMap<>();
-        final Object root = Json.parse(json); // throws on malformed JSON
-        Map<String, Object> rootObj = Json.object(root);
-        Map<String, Object> response = rootObj == null ? null : Json.object(rootObj.get("response"));
-        if (response == null) {
-            throw new IllegalArgumentException("missing 'response' object");
-        }
-        List<Object> details = Json.array(response.get("publishedfiledetails"));
-        if (details == null) {
-            throw new IllegalArgumentException("missing 'publishedfiledetails' array");
-        }
-        for (Object d : details) {
-            Map<String, Object> m = Json.object(d);
-            if (m == null) {
-                continue;
+        try {
+            final Object root = Json.parse(json); // throws on malformed JSON
+            Map<String, Object> rootObj = Json.object(root);
+            Map<String, Object> response = rootObj == null ? null : Json.object(rootObj.get("response"));
+            if (response == null) {
+                throw new IllegalArgumentException("missing 'response' object");
             }
-            Object idObj = m.get("publishedfileid");
-            final String id;
-            if (idObj instanceof Number) {
-                id = String.valueOf(((Number) idObj).longValue());
-            } else {
-                id = idObj == null ? null : String.valueOf(idObj);
+            List<Object> details = Json.array(response.get("publishedfiledetails"));
+            if (details == null) {
+                throw new IllegalArgumentException("missing 'publishedfiledetails' array");
             }
-            Object tu = m.get("time_updated");
-            long timeUpdated = tu instanceof Number ? ((Number) tu).longValue() : 0L;
-            if (id != null && !id.isEmpty() && timeUpdated > 0) {
-                out.put(id, timeUpdated);
+            for (Object d : details) {
+                Map<String, Object> m = Json.object(d);
+                if (m == null) {
+                    continue;
+                }
+                Object idObj = m.get("publishedfileid");
+                final String id;
+                if (idObj instanceof Number) {
+                    id = String.valueOf(((Number) idObj).longValue());
+                } else {
+                    id = idObj == null ? null : String.valueOf(idObj);
+                }
+                Object tu = m.get("time_updated");
+                long timeUpdated = tu instanceof Number ? ((Number) tu).longValue() : 0L;
+                if (id != null && !id.isEmpty() && timeUpdated > 0) {
+                    out.put(id, timeUpdated);
+                }
             }
+        } catch (ClassCastException e) {
+            throw new IllegalArgumentException("response has unexpected JSON structure", e);
         }
         return out;
     }
@@ -170,39 +174,43 @@ public final class WorkshopApi {
      */
     static List<String> parseChildren(String json) {
         List<String> out = new java.util.ArrayList<>();
-        final Object root = Json.parse(json); // throws on malformed JSON
-        Map<String, Object> rootObj = Json.object(root);
-        Map<String, Object> response = rootObj == null ? null : Json.object(rootObj.get("response"));
-        if (response == null) {
-            throw new IllegalArgumentException("missing 'response' object");
-        }
-        List<Object> details = Json.array(response.get("collectiondetails"));
-        if (details == null || details.isEmpty()) {
-            throw new IllegalArgumentException("missing 'collectiondetails' array");
-        }
-        Map<String, Object> first = Json.object(details.get(0));
-        if (first == null) {
-            return out;
-        }
-        List<Object> children = Json.array(first.get("children"));
-        if (children == null) {
-            return out; // not a collection (or no children): not an error
-        }
-        for (Object c : children) {
-            Map<String, Object> m = Json.object(c);
-            if (m == null) {
-                continue;
+        try {
+            final Object root = Json.parse(json); // throws on malformed JSON
+            Map<String, Object> rootObj = Json.object(root);
+            Map<String, Object> response = rootObj == null ? null : Json.object(rootObj.get("response"));
+            if (response == null) {
+                throw new IllegalArgumentException("missing 'response' object");
             }
-            Object idObj = m.get("publishedfileid");
-            final String id;
-            if (idObj instanceof Number) {
-                id = String.valueOf(((Number) idObj).longValue());
-            } else {
-                id = idObj == null ? null : String.valueOf(idObj);
+            List<Object> details = Json.array(response.get("collectiondetails"));
+            if (details == null || details.isEmpty()) {
+                throw new IllegalArgumentException("missing 'collectiondetails' array");
             }
-            if (id != null && !id.isEmpty()) {
-                out.add(id);
+            Map<String, Object> first = Json.object(details.get(0));
+            if (first == null) {
+                return out;
             }
+            List<Object> children = Json.array(first.get("children"));
+            if (children == null) {
+                return out; // not a collection (or no children): not an error
+            }
+            for (Object c : children) {
+                Map<String, Object> m = Json.object(c);
+                if (m == null) {
+                    continue;
+                }
+                Object idObj = m.get("publishedfileid");
+                final String id;
+                if (idObj instanceof Number) {
+                    id = String.valueOf(((Number) idObj).longValue());
+                } else {
+                    id = idObj == null ? null : String.valueOf(idObj);
+                }
+                if (id != null && !id.isEmpty()) {
+                    out.add(id);
+                }
+            }
+        } catch (ClassCastException e) {
+            throw new IllegalArgumentException("response has unexpected JSON structure", e);
         }
         return out;
     }

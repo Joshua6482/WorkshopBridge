@@ -136,7 +136,7 @@ public final class SteamCmd {
                 + "# escape in properties files, so C:\\steamcmd would break).\n"
                 + "# Examples:\n"
                 + "#   steamcmd.path=C:/steamcmd/steamcmd.exe\n"
-                + "#   steamcmd.path=/home/joshua/steamcmd/steamcmd.sh\n"
+                + "#   steamcmd.path=/home/user/steamcmd/steamcmd.sh\n"
                 + "# Leave it empty (or delete the file) to use the automatic download.\n"
                 + "steamcmd.path=\n";
         try {
@@ -159,7 +159,17 @@ public final class SteamCmd {
         overrideError = null;
         String override = readOverride();
         if (override != null) {
+            if (override.equals("~") || override.startsWith("~/")) {
+                override = System.getProperty("user.home") + override.substring(1);
+            }
             File f = new File(override);
+            if (f.isDirectory()) {
+                overrideError = "steamcmd.path points at a directory, not the steamcmd"
+                        + " executable itself: " + override
+                        + " (point it at the executable, e.g. C:/steamcmd/steamcmd.exe"
+                        + " or /home/user/steamcmd/steamcmd.sh)";
+                return null;
+            }
             if (!f.isFile()) {
                 overrideError = "steamcmd.path points at a missing file: " + override
                         + " (use forward slashes, e.g. C:/steamcmd/steamcmd.exe;"
@@ -331,6 +341,8 @@ public final class SteamCmd {
             try (BufferedReader br = new BufferedReader(
                     new InputStreamReader(p.getInputStream(), processOutputCharset()))) {
                 String line;
+                String lastClean = null;
+                int n = 0;
                 while ((line = br.readLine()) != null) {
                     final String clean = stripAnsi(line);
                     synchronized (output) {
@@ -338,7 +350,14 @@ public final class SteamCmd {
                             output.append(clean).append('\n');
                         }
                     }
-                    log.accept("[steamcmd] " + clean);
+                    n++;
+                    lastClean = clean;
+                    if (n == 1 || n % 25 == 0) {
+                        log.accept("[steamcmd] " + clean);
+                    }
+                }
+                if (n > 1 && n % 25 != 0 && lastClean != null) {
+                    log.accept("[steamcmd] " + lastClean);
                 }
             } catch (IOException ignored) {
                 // process ended
@@ -377,7 +396,6 @@ public final class SteamCmd {
         synchronized (output) {
             out = output.toString();
         }
-        String tail = out.substring(Math.max(0, out.length() - 2000));
         int exit = p.exitValue();
         if (exit != 0) {
             // never trust a stale cache dir: a failed update must not
@@ -586,23 +604,37 @@ public final class SteamCmd {
     }
 
     private static boolean commandExists(String name) {
+        Process p = null;
         try {
-            Process p = new ProcessBuilder("sh", "-c", "command -v " + name)
+            p = new ProcessBuilder("sh", "-c", "command -v " + name)
                     .redirectErrorStream(true).start();
             return p.waitFor(10, TimeUnit.SECONDS) && p.exitValue() == 0;
         } catch (Exception e) {
             return false;
+        } finally {
+            if (p != null && p.isAlive()) {
+                p.destroyForcibly();
+            }
         }
     }
 
+    private static volatile Boolean nixosCached;
+
     /** True on NixOS (no FHS /lib: foreign binaries need steam-run or nix-ld). */
     private static boolean isNixOS() {
+        Boolean cached = nixosCached;
+        if (cached != null) {
+            return cached;
+        }
+        boolean result;
         try {
-            return isNixOSRelease(
+            result = isNixOSRelease(
                     Files.readString(Path.of("/etc/os-release"), StandardCharsets.UTF_8));
         } catch (Exception e) {
-            return false;
+            result = false;
         }
+        nixosCached = result;
+        return result;
     }
 
     // package-private for tests

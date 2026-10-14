@@ -180,5 +180,36 @@ dlg2.cancelBtn.onclick()
 check(ms.wbAdoptDialog == nil, "cancel closes dialog")
 check(adoptArgs == nil, "cancel adopts nothing")
 
+-- ---------- AdoptFailed paths ----------
+local realAdoptFn = wbAdoptMod
+wbAdoptMod = nil -- no Java API: the click must fail safe with a flash
+WB_ShowAdoptDialog(ms, "MysteryMod")
+local dlgNoApi = ms.wbAdoptDialog
+dlgNoApi.entry:setText("444555666")
+dlgNoApi.adoptBtn.onclick()
+check(ms.wbProgressPanel ~= nil
+        and ms.wbProgressPanel.wbLabel.name == WB_Text.AdoptFailed,
+    "adopt with no Java API flashes AdoptFailed",
+    ms.wbProgressPanel and ms.wbProgressPanel.wbLabel.name)
+wbAdoptMod = realAdoptFn
+
+-- a failing adopt job surfaces the stuck error panel, not silence
+local realStatusAdopt = wbGetJobStatus
+wbGetJobStatus = function(jobId)
+    return '{"state":"failed","done":0,"total":1,'
+        .. '"message":"Adopting...","error":"no network"}'
+end
+WB_ShowAdoptDialog(ms, "MysteryMod")
+local dlgJobFail = ms.wbAdoptDialog
+dlgJobFail.entry:setText("444555666")
+dlgJobFail.adoptBtn.onclick()
+tick(10) -- the stubbed failure completes on the first poll
+wbGetJobStatus = realStatusAdopt
+local errLabel = ms.wbProgressPanel and ms.wbProgressPanel.wbLabel
+check(errLabel and errLabel.name:find("Adopt failed", 1, true) ~= nil,
+    "failed adopt job shows stuck error", errLabel and errLabel.name)
+ms.wbProgressPanel.onMouseUp(ms.wbProgressPanel, 0, 0) -- dismiss
+check(not ms.wbProgressPanel:isVisible(), "stuck error dismisses on click")
+
 print(failures == 0 and "ALL ADOPT TESTS PASSED" or (failures .. " FAILURES"))
 os.exit(failures == 0 and 0 or 1)

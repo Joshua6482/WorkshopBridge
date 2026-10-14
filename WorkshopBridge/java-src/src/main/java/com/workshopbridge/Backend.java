@@ -139,6 +139,7 @@ public final class Backend {
         if (dirs == null) {
             return null;
         }
+        boolean sidecarEnabled = isSidecarEnabled();
         for (File dir : dirs) {
             if (!modId.equals(ModInstaller.readModId(dir))) {
                 continue;
@@ -150,7 +151,7 @@ public final class Backend {
                         + modId + " (was recorded as folder \"" + dir.getName() + "\")");
                 return byFolder;
             }
-            if (isSidecarEnabled()) {
+            if (sidecarEnabled) {
                 ModSidecar sidecar = ModSidecar.read(dir);
                 if (sidecar != null) {
                     workshopMap.mergeSidecar(sidecar.workshopId, sidecar.modId,

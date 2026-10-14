@@ -45,6 +45,17 @@ for tool in javac java jar; do
     fi
 done
 
+# Fail fast on an old JDK: without this, a JDK 11 passes the checks above
+# and dies much later inside Gradle with "invalid target release: 17".
+javac_major() { # prints the major version ("17" from "javac 17.0.1",
+                # "8" from legacy "javac 1.8.0_292")
+    javac -version 2>&1 | sed -E 's/.* (1\.)?([0-9]+).*/\2/'
+}
+if [ "$(javac_major)" -lt 17 ] 2>/dev/null; then
+    echo "error: $(javac -version 2>&1) is too old; JDK 17+ is required." >&2
+    exit 1
+fi
+
 if ! command -v gradle >/dev/null 2>&1; then
     echo "error: 'gradle' not found on PATH. Install it first, e.g.:" >&2
     echo "  Debian/Ubuntu: sudo apt install gradle" >&2
@@ -108,13 +119,18 @@ resolve_pz_java() {
     PZ_JAVA="$libs/pz-java" # default, so the error below names a real path
 }
 resolve_pz_java "${1:-}"
-# Expand a leading ~ (env-provided paths are not tilde-expanded by the shell)
-# before validation, and absolutize: Gradle resolves -PpzJavaDir relative
-# to the project dir (java-src), which is not where this script runs, so it
+# Expand a leading ~ (env-provided paths are not tilde-expanded by the
+# shell), but only a bare ~ or ~/: ~user/ must keep referring to that
+# user's home, not $HOME/user.
+case "$PZ_JAVA" in
+    "~") PZ_JAVA="$HOME" ;;
+    "~/"*) PZ_JAVA="$HOME/${PZ_JAVA#"~/"}" ;;
+esac
+# Absolutize before validation: Gradle resolves -PpzJavaDir relative to
+# the project dir (java-src), which is not where this script runs, so it
 # must get an absolute path. (This is what broke the auto-detected
 # libs/projectzomboid.jar: Gradle looked for it under java-src/ and failed
 # its own check on a path that validated fine.)
-PZ_JAVA="${PZ_JAVA/#\~/$HOME}"
 case "$PZ_JAVA" in
     /*) ;;
     *) PZ_JAVA="$PWD/$PZ_JAVA" ;;

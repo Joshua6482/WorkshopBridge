@@ -119,9 +119,9 @@ fi
 [ -f "$JAR" ] || die "jar not found: $JAR"
 [ -f "$JAR.zbs" ] || die "sidecar not found: $JAR.zbs (run ./sign.sh)"
 
-cp_tree() { # cp -a, falling back to plain recursive copy where the
-            # filesystem will not let us preserve ownership
-    cp -a "$@" 2>/dev/null || cp -r "$@"
+cp_tree() { # cp -a; aborts with the real error instead of swallowing it
+            # and blindly retrying cp -r over a possibly partial tree
+    cp -a "$@" || die "copy failed: cp -a $*"
 }
 # 3. Stage the mod: what the game loads, plus the Java sources.
 #    (The official ZombieBuddy sample mod ships its java project inside
@@ -144,7 +144,10 @@ cp_tree WorkshopBridge/java-src/src WorkshopBridge/java-src/build.gradle \
     WorkshopBridge/java-src/README.md "$STAGE/WorkshopBridge/java-src/"
 STAGED_INFO="$STAGE/WorkshopBridge/common/mod.info"
 if grep -q '^modversion=' "$STAGED_INFO"; then
-    sed -i "s/^modversion=.*/modversion=$VERSION/" "$STAGED_INFO"
+    # portable in-place edit (BSD/macOS sed -i wants a backup-suffix arg):
+    # rewrite via a temp file, then move over the original
+    sed "s/^modversion=.*/modversion=$VERSION/" "$STAGED_INFO" > "$STAGED_INFO.tmp" \
+        && mv "$STAGED_INFO.tmp" "$STAGED_INFO"
 else
     printf 'modversion=%s\n' "$VERSION" >> "$STAGED_INFO"
 fi
@@ -226,10 +229,14 @@ TAG="v$VERSION"
 # refuses when a local-only tag exists ("has not been pushed ... specify
 # the --target flag to create a new tag"). Honor an existing local tag;
 # otherwise tag the commit the zip was built from.
+git rev-parse --is-inside-work-tree >/dev/null 2>&1 \
+    || die "not in a git work tree, cannot pick the release tag target (zip is at $ZIP)"
 if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null 2>&1; then
-    TAG_TARGET="$(git rev-list -n 1 "$TAG")"
+    TAG_TARGET="$(git rev-list -n 1 "$TAG" 2>/dev/null)" \
+        || die "cannot resolve tag $TAG"
 else
-    TAG_TARGET="$(git rev-parse HEAD)"
+    TAG_TARGET="$(git rev-parse HEAD 2>/dev/null)" \
+        || die "cannot resolve HEAD for the release tag"
 fi
 if [ "$TAG_TARGET" != "$(git rev-parse HEAD)" ]; then
     echo "release.sh: note: local tag $TAG points at ${TAG_TARGET:0:12}, not at"
@@ -238,11 +245,14 @@ if [ "$TAG_TARGET" != "$(git rev-parse HEAD)" ]; then
     echo "  To move the tag onto HEAD instead (only safe if it was never"
     echo "  pushed): git tag -f $TAG"
 fi
-if [ -z "$ASSUME_YES" ] && command -v gh >/dev/null 2>&1; then
-    if confirm "Create DRAFT GitHub release $TAG (tag -> ${TAG_TARGET:0:12}) and upload the zip?"; then
+if command -v gh >/dev/null 2>&1; then
+    # --yes accepts the default, so the draft release is created
+    # non-interactively instead of being silently skipped
+    if [ -n "$ASSUME_YES" ] || confirm "Create DRAFT GitHub release $TAG (tag -> ${TAG_TARGET:0:12}) and upload the zip?"; then
         # draft: joshua reviews it on github.com and publishes by hand
         RELEASE_URL="$(gh release create "$TAG" --draft --target "$TAG_TARGET" \
-            --title "V$VERSION" --notes-file "$NOTES" "$ZIP")"
+            --title "V$VERSION" --notes-file "$NOTES" "$ZIP")" \
+            || die "gh release create failed (zip is at $ZIP)"
         echo "Draft release created: $RELEASE_URL"
         echo "Review it on github.com and publish when ready."
         exit 0

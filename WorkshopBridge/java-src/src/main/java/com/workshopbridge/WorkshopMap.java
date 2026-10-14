@@ -66,11 +66,16 @@ public final class WorkshopMap {
             return;
         }
         List<String> ids = new ArrayList<>(e.modIds);
-        boolean changed = false;
-        for (int i = 0; i < ids.size(); i++) {
-            if (ids.get(i).equals(oldModId) && !ids.contains(newModId)) {
-                ids.set(i, newModId);
-                changed = true;
+        boolean changed;
+        if (ids.contains(newModId)) {
+            changed = ids.removeIf(id -> id.equals(oldModId));
+        } else {
+            changed = false;
+            for (int i = 0; i < ids.size(); i++) {
+                if (ids.get(i).equals(oldModId)) {
+                    ids.set(i, newModId);
+                    changed = true;
+                }
             }
         }
         if (changed) {
@@ -178,8 +183,11 @@ public final class WorkshopMap {
         }
     }
 
-    private synchronized void save() {
-        try {
+    private void save() {
+        final String json;
+        final Path target;
+        final Path tmp;
+        synchronized (this) {
             Map<String, Object> itemsMap = new LinkedHashMap<>();
             for (Map.Entry<String, Entry> e : items.entrySet()) {
                 Map<String, Object> m = new LinkedHashMap<>();
@@ -191,16 +199,18 @@ public final class WorkshopMap {
             Map<String, Object> root = new LinkedHashMap<>();
             root.put("version", 1);
             root.put("items", itemsMap);
-            String json = Json.stringify(root);
-            // atomic
-            Path target = file.toPath();
-            Path tmp = target.resolveSibling(file.getName() + ".tmp");
+            json = Json.stringify(root);
+            target = file.toPath();
+            tmp = target.resolveSibling(file.getName() + ".tmp");
+        }
+        try {
             Path parent = target.getParent();
             if (parent != null) {
                 Files.createDirectories(parent);
             }
             Files.writeString(tmp, json, StandardCharsets.UTF_8);
             try {
+                // atomic
                 Files.move(tmp, target,
                         StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
             } catch (AtomicMoveNotSupportedException e) {

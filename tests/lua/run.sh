@@ -7,7 +7,7 @@
 #
 # Run from anywhere:  ./tests/lua/run.sh
 set -u
-cd "$(dirname "$0")"
+cd "$(dirname "$0")" || exit 1
 ROOT="$(cd ../.. && pwd)"
 export WB_LUA_DIR="$ROOT/WorkshopBridge/42/media/lua/client/WorkshopBridge"
 
@@ -37,6 +37,7 @@ run() { # name, script
 }
 
 run "JSON decoder" test_json.lua
+run "Job utilities (WB_ShortError)" test_jobutils.lua
 run "UI integration (stubbed PZ globals)" test_ui.lua
 run "Download dialog" test_download.lua
 run "More tools" test_tools.lua
@@ -47,6 +48,16 @@ run "Server-join prompt" test_serverjoin.lua
 
 # Java -> Lua contract: serialize real job statuses with the real Json class,
 # then decode them with the real Lua decoder.
+# Sandbox fallback (same as compile.sh / tests/java/run.sh): pick up the
+# dev VM's JDK so the round-trip runs there instead of silently skipping.
+if ! command -v javac >/dev/null 2>&1; then
+    for cand in "$HOME"/workspace/.tools/jdk-*/bin; do
+        if [ -x "$cand/javac" ] && [ -x "$cand/java" ]; then
+            export PATH="$cand:$PATH"
+            break
+        fi
+    done
+fi
 if command -v javac >/dev/null 2>&1 && command -v java >/dev/null 2>&1; then
     TMPD="$(mktemp -d)"
     # shellcheck disable=SC2064

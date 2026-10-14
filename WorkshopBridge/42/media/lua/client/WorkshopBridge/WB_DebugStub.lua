@@ -63,10 +63,6 @@ function WB_InstallDebugStub()
         return true
     end
 
-    function wbGetSteamCmdPath()
-        return "stub/steamcmd"
-    end
-
     function wbGetWorkshopId(modId)
         -- Every mod looks "known" except our own, so both UI states are visible.
         if not modId or modId == WB_Config.MOD_ID then return nil end

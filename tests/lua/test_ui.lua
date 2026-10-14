@@ -599,7 +599,7 @@ wbGetJobStatus = realStatusErr
 check(ms.wbUpdatePumped, "update() pump installed on menu instance")
 -- simulate a dead tick (no OnTick firing): drive jobs via ms:update() only
 local fbDone, fbUpdates = nil, 0
-local realStatus = wbGetJobStatus
+realStatus = wbGetJobStatus
 local fbTicks = 0
 wbGetJobStatus = function(jobId)
     fbTicks = fbTicks + 1

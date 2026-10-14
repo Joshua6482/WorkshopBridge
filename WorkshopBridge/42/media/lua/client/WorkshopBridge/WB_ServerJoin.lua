@@ -86,6 +86,8 @@ function WB_OnConnectFailed(message)
 end
 
 function WB_HookServerJoin()
+    if WB_ServerJoinHooked then return end
+    WB_ServerJoinHooked = true
     if Events.OnConnectFailed then
         Events.OnConnectFailed.Add(WB_OnConnectFailed)
     end
@@ -175,12 +177,12 @@ function WB_ServerModsDialog:onDownloadClicked()
         ids[#ids + 1] = tostring(e.workshopId)
     end
     if type(wbImportMods) ~= "function" then
-        self.statusLabel.name = WB_Text.ImportFailed
+        WB_SetLabel(self.statusLabel, WB_Text.ImportFailed)
         return
     end
     local ok, jobId = pcall(wbImportMods, table.concat(ids, ","))
     if not ok or not jobId then
-        self.statusLabel.name = WB_Text.ImportFailed
+        WB_SetLabel(self.statusLabel, WB_Text.ImportFailed)
         return
     end
     if self.downloadBtn then self.downloadBtn:setEnable(false) end
@@ -188,22 +190,22 @@ function WB_ServerModsDialog:onDownloadClicked()
         .. " server mod(s) (job " .. tostring(jobId) .. ")")
     WB_TrackJob(jobId, {
         onUpdate = function(st)
-            self.statusLabel.name = (st and st.message)
-                or WB_Text.ServerModsDownloading
+            WB_SetLabel(self.statusLabel,
+                (st and st.message) or WB_Text.ServerModsDownloading)
         end,
         onDone = function(st)
             if st and st.state == "failed" then
                 print("[WorkshopBridge] server mod download failed: "
                     .. tostring(st.error or "?"))
-                self.statusLabel.name = WB_Text.ServerModsDownloadFailed
-                    .. ": " .. WB_ShortError(st.error, 64)
+                WB_SetLabel(self.statusLabel, WB_Text.ServerModsDownloadFailed
+                    .. ": " .. WB_ShortError(st.error, 64))
                 if self.downloadBtn then self.downloadBtn:setEnable(true) end
             else
                 -- the game's mod lookup cached at boot; without this the
                 -- rejoin fails on the same missing mods
                 pcall(wbInvalidateModCaches)
                 print("[WorkshopBridge] server mods downloaded")
-                self.statusLabel.name = WB_Text.ServerModsDownloaded
+                WB_SetLabel(self.statusLabel, WB_Text.ServerModsDownloaded)
             end
         end,
     })

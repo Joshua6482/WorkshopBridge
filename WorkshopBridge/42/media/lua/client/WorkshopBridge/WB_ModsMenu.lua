@@ -165,7 +165,7 @@ local function WB_OnCheckAll(ms)
             -- the job's final message is the summary ("Everything is up
             -- to date" / "N mod(s) have updates"); flash it briefly so
             -- a clean check isn't just silence
-            WB_FlashMessage(ms, (st and st.message) or WB_Text.Checking)
+            WB_FlashMessage(ms, (st and st.message) or WB_Text.UpToDate)
         end,
     })
 end
@@ -205,7 +205,7 @@ local function WB_OnUpdateAll(ms)
             for k, j in pairs(wbModJobs) do
                 if j.failed then wbModJobs[k] = nil end
             end
-            WB_FlashMessage(ms, (st and st.message) or WB_Text.Updating)
+            WB_FlashMessage(ms, (st and st.message) or WB_Text.UpToDate)
             -- rescan so newly downloaded/changed mods appear in the list
             WB_RefreshModList(ms)
         end,
@@ -229,6 +229,7 @@ end
 
 local function WB_OnModUpdate(panel)
     local modId = panel.wbModId
+    local ms = wbScreen -- captured now: the global may change mid-job
     local wsid = WB_WorkshopIdFor(modId)
     if not wsid or type(wbUpdateMod) ~= "function" then return end
     -- coalesce: an update for this workshop item is already in flight, so
@@ -280,7 +281,7 @@ local function WB_OnModUpdate(panel)
                 -- "update available" too
                 WB_UnmarkUpdateAvailable(wsid)
                 -- the Update-all count dropped by one as well
-                WB_RefreshUpdateAllButton(wbScreen, WB_CountUpdateAvailable())
+                WB_RefreshUpdateAllButton(ms, WB_CountUpdateAvailable())
             end
             if WB_WorkshopIdFor(panel.wbModId) == wsid then
                 WB_SetLabel(panel.wbStatusLabel,
@@ -292,7 +293,7 @@ local function WB_OnModUpdate(panel)
             -- info panel is not repainted by the reload (it only updates
             -- on selection), so the confirmation above stays visible.
             if not failed then
-                WB_RefreshModList(wbScreen)
+                WB_RefreshModList(ms)
             end
         end,
     })
@@ -320,7 +321,8 @@ local function WB_AddMenuButtons(ms)
     local xUpdate = anchor:getX() - gap - bw
     local xCheck = xUpdate - gap - bw
     local xDownload = xCheck - gap - bw
-    local xTools = xDownload - gap - bw
+    -- clamp: on narrow displays the leftmost button would land off-screen
+    local xTools = math.max(0, xDownload - gap - bw)
     ms.wbCheckBtn = ISButton:new(xCheck, y, bw, bh, WB_Text.CheckForUpdates, ms,
         function() WB_OnCheckAll(ms) end)
     ms.wbUpdateAllBtn = ISButton:new(xUpdate, y, bw, bh, WB_Text.UpdateAll, ms,
@@ -365,6 +367,10 @@ local function WB_WrapRowDrawing()
     local baseDraw = MLB.doDrawItem
     if type(baseDraw) ~= "function" then return end
     MLB.wbRowWrapped = true
+    -- cached on first use: the font never changes mid-session, and the old
+    -- call ran per updated-mod row per frame. Lazy rather than at wrap
+    -- time because getTextManager may not exist yet when hooks install.
+    local badgeFontH = nil
     MLB.doDrawItem = function(lb, y, item, alt)
         -- vanilla prerender does arithmetic on the return value
         -- (v.height = y2 - y), so it MUST be propagated
@@ -381,7 +387,10 @@ local function WB_WrapRowDrawing()
             local bx = lb:getWidth() - 10
             local panel = lb and lb.parent or nil
             if panel and panel.mfNewFolderButton ~= nil then
-                local buttonH = getTextManager():getFontHeight(UIFont.Small) + 6
+                if not badgeFontH then
+                    badgeFontH = getTextManager():getFontHeight(UIFont.Small)
+                end
+                local buttonH = badgeFontH + 6
                 bx = bx - 3 * buttonH - 16
             end
             -- drawTextRight: right-aligned at x, no manual width measuring needed
@@ -404,12 +413,29 @@ local function WB_WrapUpdatePump(ms)
     ms.wbUpdatePumped = true
     local _update = ms.update
     if type(_update) ~= "function" then return end
-    local pollErrorLogged = false
+    -- poll failures stay visible without flooding the log: a new failure
+    -- mode prints immediately, repeats of the same one heartbeat every
+    -- ~10s (600 frames) with a count
+    local lastPollErr, pollErrRepeats = nil, 0
     ms.update = function(self, ...)
         local ok, err = pcall(WB_FallbackPump)
-        if not ok and not pollErrorLogged then
-            pollErrorLogged = true
-            print("[WorkshopBridge] poll error: " .. tostring(err))
+        if not ok then
+            err = tostring(err)
+            if err ~= lastPollErr then
+                if pollErrRepeats > 0 then
+                    print("[WorkshopBridge] poll error repeated "
+                        .. pollErrRepeats .. " more time(s): "
+                        .. tostring(lastPollErr))
+                end
+                lastPollErr, pollErrRepeats = err, 0
+                print("[WorkshopBridge] poll error: " .. err)
+            else
+                pollErrRepeats = pollErrRepeats + 1
+                if pollErrRepeats % 600 == 0 then
+                    print("[WorkshopBridge] poll error, still failing (x"
+                        .. (pollErrRepeats + 1) .. "): " .. err)
+                end
+            end
         end
         return _update(self, ...)
     end
@@ -476,16 +502,22 @@ local function WB_HookModInfoPanel()
     local MIP = WB_GetModInfoPanelClass()
     if not MIP or MIP.wbHooked then return end
     MIP.wbHooked = true
-    local _createChildren = MIP.createChildren
-    MIP.createChildren = function(self)
-        _createChildren(self)
-        WB_AddModPanelControls(self)
+    -- nil-guard each method before wrapping (like WB_WrapUpdatePump does):
+    -- a missing method skips its wrap instead of crashing at menu open
+    if type(MIP.createChildren) == "function" then
+        local _createChildren = MIP.createChildren
+        MIP.createChildren = function(self)
+            _createChildren(self)
+            WB_AddModPanelControls(self)
+        end
     end
-    local _updateView = MIP.updateView
-    MIP.updateView = function(self, modInfo)
-        _updateView(self, modInfo)
-        wbLastModPanel = { panel = self, modInfo = modInfo }
-        WB_RefreshModPanel(self, modInfo)
+    if type(MIP.updateView) == "function" then
+        local _updateView = MIP.updateView
+        MIP.updateView = function(self, modInfo)
+            _updateView(self, modInfo)
+            wbLastModPanel = { panel = self, modInfo = modInfo }
+            WB_RefreshModPanel(self, modInfo)
+        end
     end
 end
 
@@ -497,7 +529,9 @@ function WB_HookModsMenu()
         print("[WorkshopBridge] WARN: ModSelector not found, menu hooks skipped")
         return
     end
-    if not ModSelector.wbHooked then
+    if not ModSelector.wbHooked and type(ModSelector.create) == "function" then
+        -- the guard stays clear when create is missing so a later re-call
+        -- retries the wrap instead of locking in the skip
         ModSelector.wbHooked = true
         local _create = ModSelector.create
         ModSelector.create = function(self)

@@ -76,9 +76,13 @@ public class OnlineSmoke {
                         modFolders == null ? null : String.join(",", modFolders));
 
                 // ---- 4. through the real install pipeline ----
+                // staging dir derived from the backend's cache dir; the
+                // ".install-staging" leaf must match JobManager's staging
+                // dir (no accessor exists, so the name is coupled here)
+                File stagingDir = new File(Backend.get().cacheDir(), ".install-staging");
                 List<String> installed = ModInstaller.install(
                         itemDir, new File(zomboidDir, "mods"),
-                        new File(zomboidDir, "workshop_cache/.install-staging"),
+                        stagingDir,
                         PROBE_ID, System.currentTimeMillis() / 1000L, true,
                         System.out::println);
                 check(!installed.isEmpty(), "real install yields mod ids", installed);

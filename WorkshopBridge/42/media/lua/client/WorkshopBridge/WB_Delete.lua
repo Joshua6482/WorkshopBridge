@@ -162,7 +162,9 @@ function WB_ShowDeleteDialog(ms, modId, wsid, otherIds)
     end
     otherIds = otherIds or {}
     local shown = math.min(#otherIds, 8)
-    local h = 12 + 24 + 22 + 24 + 4
+    -- NB: the trailing +4 lives inside the sub-mods branch below, matching
+    -- buildControls (which only adds it when sub-mods are listed)
+    local h = 12 + 24 + 22 + 24
     if #otherIds > 0 then
         h = h + 20 + shown * 20
         if #otherIds > shown then h = h + 20 end

@@ -47,6 +47,11 @@ end
 
 local activeJobs = {}       -- jobId -> { onUpdate=fn, onDone=fn }
 local lastJobState = {}     -- jobId -> last seen state (for transition logging)
+-- Jobs tracked while WB_PollJobs is traversing activeJobs: inserting new
+-- keys into a table during pairs() traversal is undefined in Lua, so they
+-- wait here and are merged into activeJobs after the loop.
+local pollActive = false
+local deferredTracks = {}   -- list of { jobId, callbacks }
 -- workshopId -> true, set by check jobs. Keyed by workshop id, not mod id:
 -- the workshop item is the update unit (one item can hold several mods),
 -- so updating via any one of its mods clears the flag for all of them.
@@ -60,7 +65,11 @@ local panelOwner = nil      -- jobId owning the shared progress panel, if any
 
 function WB_TrackJob(jobId, callbacks)
     if not jobId then return end
-    activeJobs[jobId] = callbacks or {}
+    if pollActive then
+        deferredTracks[#deferredTracks + 1] = { jobId, callbacks or {} }
+    else
+        activeJobs[jobId] = callbacks or {}
+    end
     WB_EnsurePolling()
 end
 
@@ -121,6 +130,7 @@ function WB_PollJobs()
                 .. " activeJobs=" .. n)
         end
     end
+    pollActive = true
     for jobId, cb in pairs(activeJobs) do
         -- wbGetJobStatus returns a JSON string (see docs/ARCHITECTURE.md);
         -- decode it into a table here.
@@ -155,6 +165,14 @@ function WB_PollJobs()
             if cb.onDone then pcall(cb.onDone, { state = "failed", error = tostring(st) }) end
         end
         currentJob = nil
+    end
+    pollActive = false
+    -- merge jobs tracked mid-poll (see WB_TrackJob): the next poll picks
+    -- them up deterministically instead of maybe-seeing them mid-traversal
+    for i = 1, #deferredTracks do
+        local t = deferredTracks[i]
+        activeJobs[t[1]] = t[2]
+        deferredTracks[i] = nil
     end
     WB_TickProgressPanel(wbTick)
 end

@@ -4,7 +4,7 @@ import java.io.IOException;
 import java.net.ConnectException;
 import java.net.SocketTimeoutException;
 import java.net.UnknownHostException;
-import java.net.http.HttpConnectTimeoutException;
+import java.net.http.HttpTimeoutException;
 
 /**
  * Turns raw network failures into messages a player can act on.
@@ -23,7 +23,7 @@ public final class Net {
             if (t instanceof ConnectException) {
                 return "Couldn't connect to Steam's servers - check your internet connection.";
             }
-            if (t instanceof HttpConnectTimeoutException || t instanceof SocketTimeoutException) {
+            if (t instanceof HttpTimeoutException || t instanceof SocketTimeoutException) {
                 return "Timed out reaching Steam's servers - check your internet connection.";
             }
             t = t.getCause();

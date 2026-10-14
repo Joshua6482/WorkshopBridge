@@ -26,6 +26,7 @@
 #   WB_SIGNING_DIR  signing directory (default ~/.signing)
 #   WB_STEAMID64     SteamID64 to use non-interactively (saved for later runs)
 set -euo pipefail
+cd "$(dirname "$0")"  # repo root (same as compile.sh/release.sh)
 
 SIGNING_DIR="${WB_SIGNING_DIR:-$HOME/.signing}"
 KEY_FILE="$SIGNING_DIR/workshopbridge-ed25519.der"
@@ -48,14 +49,17 @@ chmod 700 "$SIGNING_DIR"
 # 1. Private key: generate once, keep it private.
 if [ ! -f "$KEY_FILE" ]; then
     echo "sign.sh: generating new Ed25519 keypair in $SIGNING_DIR ..."
-    openssl genpkey -algorithm ed25519 -outform DER -out "$KEY_FILE"
+    # umask in a subshell: no world-readable window before the chmod below
+    (umask 077; openssl genpkey -algorithm ed25519 -outform DER -out "$KEY_FILE")
     chmod 600 "$KEY_FILE"
 fi
 
 # 2. Public key hex, derived from the private key and cached.
 #    openssl emits a 44-byte SubjectPublicKeyInfo for Ed25519; the raw
 #    32-byte key is the tail of it.
-if [ ! -f "$PUB_FILE" ]; then
+#    Re-derived whenever the key file is newer than the cache, so a
+#    replaced key can never go stale silently.
+if [ ! -f "$PUB_FILE" ] || [ "$KEY_FILE" -nt "$PUB_FILE" ]; then
     SPKI_LEN="$(openssl pkey -in "$KEY_FILE" -inform DER -pubout -outform DER | wc -c)"
     [ "$SPKI_LEN" -eq 44 ] || die "unexpected Ed25519 public key length ($SPKI_LEN bytes)"
     openssl pkey -in "$KEY_FILE" -inform DER -pubout -outform DER \

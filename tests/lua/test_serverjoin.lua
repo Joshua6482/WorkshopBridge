@@ -119,6 +119,8 @@ local FAIL_MSG = "Mod required: Super Mod [ModID: supermod, WorkshopID: 111]"
 
 WB_HookServerJoin()
 check(#Events.OnConnectFailed.handlers == 1, "handler registered on hook")
+WB_HookServerJoin() -- again: idempotent, must not duplicate the handler
+check(#Events.OnConnectFailed.handlers == 1, "re-hook adds no duplicate handler")
 
 -- ---------- 1. missing mods -> dialog -> Download all ----------
 serverModsJson = serverMods({

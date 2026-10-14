@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -89,7 +90,15 @@ public final class JobManager {
         if (cur != null && cur.state == State.RUNNING) {
             return cur.id;
         }
-        String id = submit("check", this::runCheck);
+        String id = submit("check", job -> {
+            try {
+                runCheck(job);
+            } finally {
+                if (activeCheck == job) {
+                    activeCheck = null;
+                }
+            }
+        });
         activeCheck = jobs.get(id);
         return id;
     }
@@ -239,7 +248,6 @@ public final class JobManager {
             }
         }
         job.updates = withUpdates;
-        job.done = ids.size();
         job.message = checkSummary(withUpdates.size(), missing) + skippedSuffix(skipped);
         job.state = State.DONE;
     }
@@ -280,7 +288,7 @@ public final class JobManager {
             try {
                 downloadAndInstall(e.getKey(), e.getValue());
             } catch (Exception ex) {
-                fail(job, new Exception("failed on " + e.getKey() + ": " + ex.getMessage(), ex));
+                fail(job, new Exception("failed on " + e.getKey() + ": " + errText(ex), ex));
                 return;
             }
             job.done = i;
@@ -400,12 +408,13 @@ public final class JobManager {
 
     private void runImport(Job job, List<String> workshopIds) {
         // clean the input: digits only, order kept, duplicates dropped
-        List<String> ids = new ArrayList<>();
+        Set<String> seen = new LinkedHashSet<>();
         for (String id : workshopIds) {
-            if (id != null && id.matches("\\d+") && !ids.contains(id)) {
-                ids.add(id);
+            if (id != null && id.matches("\\d+")) {
+                seen.add(id);
             }
         }
+        List<String> ids = new ArrayList<>(seen);
         if (ids.isEmpty()) {
             fail(job, new IllegalArgumentException("no valid workshop ids to import"));
             return;
@@ -441,7 +450,7 @@ public final class JobManager {
                         tu == null ? System.currentTimeMillis() / 1000L : tu);
                 imported++;
             } catch (Exception ex) {
-                fail(job, new Exception("failed on " + wsid + ": " + ex.getMessage(), ex));
+                fail(job, new Exception("failed on " + wsid + ": " + errText(ex), ex));
                 return;
             }
             job.done = i;
@@ -524,6 +533,11 @@ public final class JobManager {
         job.state = State.FAILED;
         job.error = t.getMessage() == null ? t.toString() : t.getMessage();
         System.out.println("[WorkshopBridge] job " + job.id + " (" + job.kind + ") failed: " + t);
+    }
+
+    private static String errText(Throwable t) {
+        String m = t.getMessage();
+        return m == null ? t.getClass().getSimpleName() : m;
     }
 
     // package-private for tests

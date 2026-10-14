@@ -327,7 +327,7 @@ function WB_ShowToolsDialog(ms)
         ms.wbToolsDialog:setVisible(true)
         return
     end
-    local w, h = 360, 250
+    local w, h = 360, 194 -- content ends at y=182 (cancel button), +12 pad
     local dlg = WB_ToolsDialog:new(
         math.max(0, ms:getWidth() / 2 - w / 2),
         math.max(0, ms:getHeight() / 2 - h / 2), w, h)

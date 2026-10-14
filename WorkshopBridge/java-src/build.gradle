@@ -25,11 +25,15 @@ def pzHasGameClasses(String loc) {
     def f = file(loc)
     if (new File(f, 'zombie/ZomboidFileSystem.class').isFile()) return true
     if (f.isFile() && loc.endsWith('.jar')) {
-        def zip = new java.util.zip.ZipFile(f)
         try {
-            return zip.getEntry('zombie/ZomboidFileSystem.class') != null
-        } finally {
-            zip.close()
+            def zip = new java.util.zip.ZipFile(f)
+            try {
+                return zip.getEntry('zombie/ZomboidFileSystem.class') != null
+            } finally {
+                zip.close()
+            }
+        } catch (java.util.zip.ZipException e) {
+            return false
         }
     }
     return false

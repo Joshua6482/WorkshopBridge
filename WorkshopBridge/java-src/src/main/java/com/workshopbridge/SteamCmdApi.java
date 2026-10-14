@@ -28,16 +28,6 @@ public final class SteamCmdApi {
         }
     }
 
-    /** Absolute steamcmd path, or null when not detected. */
-    @LuaMethod(name = "wbGetSteamCmdPath", global = true)
-    public static String wbGetSteamCmdPath() {
-        try {
-            return Backend.get().steamCmd().findExecutable();
-        } catch (Throwable t) {
-            return null;
-        }
-    }
-
     /**
      * Workshop id for a PZ mod id (the id= value from mod.info),
      * or null when the mod wasn't installed via WorkshopBridge.
@@ -145,17 +135,17 @@ public final class SteamCmdApi {
     /** Splits a comma/newline/whitespace-separated id list, digits only,
      * order kept, duplicates dropped. */
     static java.util.List<String> parseIdList(String idsCsv) {
-        java.util.List<String> ids = new java.util.ArrayList<>();
+        java.util.Set<String> seen = new java.util.LinkedHashSet<>();
         if (idsCsv == null) {
-            return ids;
+            return new java.util.ArrayList<>(seen);
         }
         for (String part : idsCsv.split("[,\\s]+")) {
             String id = part.trim();
-            if (id.matches("\\d+") && !ids.contains(id)) {
-                ids.add(id);
+            if (id.matches("\\d+")) {
+                seen.add(id);
             }
         }
-        return ids;
+        return new java.util.ArrayList<>(seen);
     }
 
     /**

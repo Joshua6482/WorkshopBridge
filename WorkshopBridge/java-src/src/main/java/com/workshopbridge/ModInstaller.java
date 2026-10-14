@@ -177,6 +177,11 @@ public final class ModInstaller {
             try {
                 moveAtomicOnce(from, to);
                 return;
+            } catch (AccessDeniedException e) {
+                last = e;
+                if (i == 0) {
+                    sleepQuiet(150);
+                }
             } catch (IOException e) {
                 last = e;
                 sleepQuiet(150);
@@ -208,6 +213,23 @@ public final class ModInstaller {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
+    }
+
+    private static void deleteDropped(Path p) throws IOException {
+        IOException last = null;
+        for (int i = 0; i < 3; i++) {
+            p.toFile().setWritable(true);
+            try {
+                Files.delete(p);
+                return;
+            } catch (IOException e) {
+                last = e;
+                if (i < 2) {
+                    sleepQuiet(150);
+                }
+            }
+        }
+        throw last;
     }
 
     /**
@@ -265,7 +287,7 @@ public final class ModInstaller {
                 if (p.getFileName().toString().equals(ModSidecar.FILE_NAME)) {
                     continue; // re-stamped (or removed) below
                 }
-                Files.delete(p);
+                deleteDropped(p);
             }
         }
         // 3. stamp last, so an interrupted merge still looks outdated

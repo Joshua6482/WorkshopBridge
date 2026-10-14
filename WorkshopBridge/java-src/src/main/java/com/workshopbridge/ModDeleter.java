@@ -4,6 +4,7 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.function.Consumer;
 
@@ -61,7 +62,7 @@ public final class ModDeleter {
             modIds.addAll(entry.modIds);
         }
         Result r = deleteFolders(backend, workshopId, modIds);
-        if (r.failed.isEmpty()) {
+        if (r.failed.isEmpty() && r.skipped.isEmpty()) {
             backend.workshopMap().remove(workshopId);
         }
         return r;
@@ -125,7 +126,15 @@ public final class ModDeleter {
         try {
             String modsRoot = backend.modsDir().getCanonicalPath();
             String target = folder.getCanonicalPath();
-            if (!target.startsWith(modsRoot + File.separator)) {
+            String prefix = modsRoot + File.separator;
+            boolean inside;
+            if (System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("win")) {
+                inside = target.toLowerCase(Locale.ROOT)
+                        .startsWith(prefix.toLowerCase(Locale.ROOT));
+            } else {
+                inside = target.startsWith(prefix);
+            }
+            if (!inside) {
                 return "folder is outside the mods directory";
             }
         } catch (Exception e) {

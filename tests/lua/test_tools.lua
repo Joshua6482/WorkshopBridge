@@ -280,6 +280,17 @@ flash = ms.wbProgressPanel and ms.wbProgressPanel.wbLabel
 check(flash and flash.name == WB_Text.NothingToExport, "empty export explains",
     flash and flash.name)
 
+-- export with no Java API: failure flash, no crash
+ms.model = { mods = { TrackedMod = { isActive = true, modInfo = modInfo("3333333333") } } }
+local realExportFn = wbExportModList
+wbExportModList = nil
+ms.wbToolsBtn.onclick()
+ms.wbToolsDialog.exportBtn.onclick()
+flash = ms.wbProgressPanel and ms.wbProgressPanel.wbLabel
+check(flash and flash.name == WB_Text.ExportFailed, "export with no API flashes ExportFailed",
+    flash and flash.name)
+wbExportModList = realExportFn
+
 -- ---------- import from text ----------
 ms.wbToolsBtn.onclick()
 ms.wbToolsDialog.importTextBtn.onclick()
@@ -343,7 +354,7 @@ check(WB_GetRefreshListPerDownload() == true,
 importedCsv = nil
 ms.wbToolsBtn.onclick()
 ms.wbToolsDialog.importTextBtn.onclick()
-local tdlg2 = ms.wbImportTextDialog
+tdlg2 = ms.wbImportTextDialog
 tdlg2.cancelBtn.onclick()
 check(ms.wbImportTextDialog == nil, "import-text cancel closes")
 check(importedCsv == nil, "cancel imports nothing")

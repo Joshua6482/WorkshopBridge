@@ -12,7 +12,7 @@ public class Main {
     public static void main(String[] args) {
         exposeLuaApi();
         System.out.println("[WorkshopBridge] Java backend loaded via ZombieBuddy "
-                + "(Lua API: wbIsAvailable, wbGetSteamCmdPath, wbGetWorkshopId, "
+                + "(Lua API: wbIsAvailable, wbGetWorkshopId, "
                 + "wbCheckForUpdates, wbUpdateAll, wbUpdateMod, wbInvalidateModCaches, "
                 + "wbGetJobStatus, wbOpenWorkshopPage, wbExportModList, "
                 + "wbImportMods, wbImportCollection, wbAdoptMod, wbCheckDependencies, "
