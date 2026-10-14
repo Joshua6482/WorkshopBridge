@@ -10,13 +10,18 @@ f:close()
 check(#lines == 5, "five payloads", #lines)
 local r = WB_JsonDecode(lines[1])
 check(r.state == "running" and r.done == 2 and r.total == 5, "running fields")
-check(r.current == 'Downloading "Cool Mod" (id 12345) \\ path', "escapes round-trip", r.current)
+check(r.message == 'Downloading "Cool Mod" (id 12345) \\ path', "escapes round-trip", r.message)
+check(r.error == nil, "error key omitted when null")
+check(#r.updates == 0 and #r.deps == 0, "empty updates/deps lists")
 local d = WB_JsonDecode(lines[2])
-check(d.state == "done" and #d.updates == 2 and d.updates[1] == "ModA"
-    and #d.installed == 1 and #d.failed == 0, "done fields + lists")
+check(d.state == "done" and d.done == 3 and d.total == 3
+    and #d.updates == 2 and d.updates[1] == "ModA", "done fields + updates")
+check(d.message == "2 updates available", "done message", d.message)
+check(d.error == nil and #d.deps == 0, "done has no error, empty deps")
 local x = WB_JsonDecode(lines[3])
 check(x.state == "failed" and x.error ==
-    "Couldn't reach Steam's servers - check your internet connection.", "failed fields")
+    "Couldn't reach Steam's servers - check your internet connection."
+    and #x.updates == 0 and #x.deps == 0, "failed fields")
 local w = WB_JsonDecode(lines[4])
 check(w.state == "done" and #w.deps == 2 and w.deps[1].id == "3171167894"
     and w.deps[1].title == "that DAMN Library" and w.deps[1].installed == false

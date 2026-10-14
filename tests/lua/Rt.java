@@ -3,28 +3,34 @@ import java.util.*;
 
 public class Rt {
     public static void main(String[] a) {
-        // mimic JobManager.jobStatus() output shapes
+        // mimic JobManager.Job.toJson() output shapes:
+        // {state, done, total, message, error (only when non-null), updates, deps}
         Map<String, Object> running = new LinkedHashMap<>();
-        running.put("id", "job-42"); running.put("state", "running");
+        running.put("state", "running");
         running.put("done", 2); running.put("total", 5);
-        running.put("current", "Downloading \"Cool Mod\" (id 12345) \\ path");
-        running.put("error", "");
+        running.put("message", "Downloading \"Cool Mod\" (id 12345) \\ path");
+        running.put("updates", new ArrayList<>());
+        running.put("deps", new ArrayList<>());
         System.out.println(Json.stringify(running));
         Map<String, Object> done = new LinkedHashMap<>();
-        done.put("id", "job-43"); done.put("state", "done");
+        done.put("state", "done");
         done.put("done", 3); done.put("total", 3);
+        done.put("message", "2 updates available");
         done.put("updates", Arrays.asList("ModA", "ModB"));
-        done.put("installed", Arrays.asList("ModA"));
-        done.put("failed", new ArrayList<>());
-        done.put("error", "");
+        done.put("deps", new ArrayList<>());
         System.out.println(Json.stringify(done));
         Map<String, Object> failed = new LinkedHashMap<>();
-        failed.put("id", "job-44"); failed.put("state", "failed");
+        failed.put("state", "failed");
+        failed.put("done", 0); failed.put("total", 1);
+        failed.put("message", "");
         failed.put("error", "Couldn't reach Steam's servers - check your internet connection.");
+        failed.put("updates", new ArrayList<>());
+        failed.put("deps", new ArrayList<>());
         System.out.println(Json.stringify(failed));
         Map<String, Object> withDeps = new LinkedHashMap<>();
-        withDeps.put("id", "job-45"); withDeps.put("state", "done");
+        withDeps.put("state", "done");
         withDeps.put("done", 1); withDeps.put("total", 1);
+        withDeps.put("message", "1 new dependency found");
         withDeps.put("updates", new ArrayList<>());
         Map<String, Object> dep1 = new LinkedHashMap<>();
         dep1.put("id", "3171167894"); dep1.put("title", "that DAMN Library");
