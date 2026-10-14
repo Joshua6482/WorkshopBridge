@@ -316,13 +316,21 @@ local function WB_AddMenuButtons(ms)
     -- anchored right+bottom; ours join it on the left using the same pattern
     local anchor = ms.mapOrderbtn or ms.modOrderbtn or ms.acceptButton
     if not anchor then return end
-    local bw, bh, gap = 150, anchor:getHeight(), 10
+    local bh, gap = anchor:getHeight(), 10
     local y = anchor:getY()
-    local xUpdate = anchor:getX() - gap - bw
-    local xCheck = xUpdate - gap - bw
-    local xDownload = xCheck - gap - bw
-    -- clamp: on narrow displays the leftmost button would land off-screen
-    local xTools = math.max(0, xDownload - gap - bw)
+    -- Four buttons join vanilla's bottom-right cluster on its left. On narrow
+    -- displays 4x150px would run off-screen (the old math.max clamp only
+    -- prevented that by stacking the leftmost button over its neighbor),
+    -- so shrink the buttons to fit the space left of the anchor.
+    local bw = 150
+    local avail = anchor:getX() - gap
+    if 4 * bw + 3 * gap > avail then
+        bw = math.max(100, math.floor((avail - 3 * gap) / 4))
+    end
+    local xTools = math.max(0, anchor:getX() - gap - (4 * bw + 3 * gap))
+    local xDownload = xTools + bw + gap
+    local xCheck = xDownload + bw + gap
+    local xUpdate = xCheck + bw + gap
     ms.wbCheckBtn = ISButton:new(xCheck, y, bw, bh, WB_Text.CheckForUpdates, ms,
         function() WB_OnCheckAll(ms) end)
     ms.wbUpdateAllBtn = ISButton:new(xUpdate, y, bw, bh, WB_Text.UpdateAll, ms,
