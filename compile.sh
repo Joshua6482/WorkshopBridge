@@ -137,5 +137,5 @@ if [ "${WB_DIAGNOSTICS:-true}" = "false" ]; then
     echo "(diagnostics excluded: release build)"
     GRADLE_DIAG=(-Pdiagnostics=false)
 fi
-(cd "$SRC" && gradle -PpzJavaDir="$PZ_JAVA" "${GRADLE_DIAG[@]}" installJar)
+(cd "$SRC" && gradle -PpzJavaDir="$PZ_JAVA" ${GRADLE_DIAG[@]+"${GRADLE_DIAG[@]}"} installJar)
 echo "Built: WorkshopBridge/42/media/java/WorkshopBridge.jar"
