@@ -21,6 +21,11 @@ In this doc, "the Zomboid folder" means the game's save/cache directory: `~/Zomb
      Install `steam-run` from nixpkgs (or enable `nix-ld`); WorkshopBridge
      runs steamcmd through `steam-run` automatically when it's available.
 4. Launch the game. If you run with `-Dzomboid.steam=0` (GOG), everything works. WorkshopBridge never touches Steamworks.
+   - *steam-run / sandboxed launch:* if the game itself runs inside `steam-run`'s
+     bubblewrap sandbox (common on NixOS), add
+     `-Djdk.lang.Process.launchMechanism=FORK` to the game's Java command line.
+     The JDK's default `posix_spawn` process launcher is blocked inside the
+     sandbox, so steamcmd can't start without this flag.
 
 ## Windows notes
 
