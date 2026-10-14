@@ -15,7 +15,9 @@
 # One-time setup: put ZombieBuddy.jar in WorkshopBridge/java-src/libs/
 # (see WorkshopBridge/java-src/README.md).
 #
-# Needs: JDK 17+ and Gradle on PATH. Run from anywhere.
+# Needs: JDK 17+ and Gradle. On a normal machine they must be on PATH;
+# in this dev VM the sandbox-JDK fallback below picks up ~/.tools when
+# they are not. Run from anywhere.
 #
 # Env:
 #   WB_DIAGNOSTICS=false  exclude dev-only probes (Diagnostics.java) from

@@ -701,6 +701,11 @@ public class WBTest {
         // our code's error strings: in sandboxed environments loopback HTTP may
         // be intercepted or dead, and the failure mode varies. On a normal
         // machine the probe succeeds and every assertion below runs for real.
+        // Caveat: when the probe fails, the ~15 SKIPPED checks below mean a
+        // green "ALL TESTS PASSED" here covers less than it looks (the
+        // check-job, update-all, coalescing, malformed-API, map re-read and
+        // in-flight exclusion paths are all skipped). Deliberate, but read
+        // the summary with that in mind.
         boolean liveHttp = stubApiUsable(System.getProperty("workshopbridge.steamApiUrl"));
         if (!liveHttp) {
             System.out.println("SKIPPED live check-job HTTP test (no usable loopback HTTP here)");

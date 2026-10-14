@@ -10,6 +10,9 @@
 #      is left untouched)
 #   4. zips it to dist/WorkshopBridge-<version>.zip
 #   5. prints SHA-256 hashes and a VirusTotal report link for the zip
+#   6. creates a DRAFT GitHub release with `gh release create --draft`
+#      (skipped when gh is missing or the confirm prompt is declined;
+#      joshua publishes the draft by hand on github.com)
 #
 # The VirusTotal link is https://www.virustotal.com/gui/file/<zip sha256>.
 # That page shows a scan report once the zip has been uploaded to
@@ -21,7 +24,7 @@
 # keyed by file hash, so it has to match the distributed artifact.
 #
 # Usage:
-#   ./release.sh [--yes] [--no-build] [--version=2026.10.04]
+#   ./release.sh [--yes] [--no-build] [--version=2026.10.12]
 #
 #   --yes        non-interactive: accept defaults, overwrite existing zip
 #   --no-build   skip compile+sign; package the tree as-is (the jar and

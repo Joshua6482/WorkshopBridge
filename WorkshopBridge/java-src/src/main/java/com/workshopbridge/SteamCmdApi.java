@@ -234,13 +234,13 @@ public final class SteamCmdApi {
 
     /**
      * Opens the workshop page for an item in the system browser.
-        * Returns true if a browser process was launched. Tries
-        * {@code java.awt.Desktop} first, then falls back to OS-specific launcher
-        * commands. The workshop id is validated as digits only before it is used
-        * in a command. If process launching fails because posix_spawn is blocked
-        * (e.g. inside steam-run's sandbox), add
-        * {@code -Djdk.lang.Process.launchMechanism=FORK} to the game's Java
-        * command line; see docs/INSTALL.md.
+     * Returns true if a browser process was launched. Tries
+     * {@code java.awt.Desktop} first, then falls back to OS-specific launcher
+     * commands. The workshop id is validated as digits only before it is used
+     * in a command. If process launching fails because posix_spawn is blocked
+     * (e.g. inside steam-run's sandbox), add
+     * {@code -Djdk.lang.Process.launchMechanism=FORK} to the game's Java
+     * command line; see docs/INSTALL.md.
      */
     @LuaMethod(name = "wbOpenWorkshopPage", global = true)
     public static boolean wbOpenWorkshopPage(String workshopId) {

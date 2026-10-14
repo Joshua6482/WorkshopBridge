@@ -19,6 +19,8 @@
 #
 # Usage:
 #   ./sign.sh [path/to/WorkshopBridge.jar]
+# Runs from its own directory (cds to the repo root first), so the default
+# jar path is relative to the repo root and the script works from anywhere.
 # Writes <jar>.zbs next to the jar. Re-run after every rebuild; a stale
 # .zbs will not validate a rebuilt jar.
 #

@@ -140,6 +140,9 @@ Via the vanilla `PZAPI.ModOptions` system, persisted to `ModOptions.ini`:
   from `<Zomboid>/Lua/ModOptions.ini` (`ModOptionsIni`: vanilla
   `tickbox|<modId>|<optionId>|true` lines, last wins), so applying it takes
   effect without a restart; missing file/option degrades to on.
+- "Enable collection import (experimental)" (default off): shows the
+  collection import button in More tools, importing every mod in a Steam
+  Workshop collection at once. Still untested in-game.
 
 ## Flows
 

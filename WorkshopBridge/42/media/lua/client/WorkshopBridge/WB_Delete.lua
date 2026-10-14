@@ -126,7 +126,9 @@ function WB_DeleteDialog:onDeleteClicked()
     local deleted = dec.deleted or {}
     print("[WorkshopBridge] deleted " .. tostring(#deleted)
         .. " folder(s) for " .. tostring(modId))
-    -- NOTE: no next() here - the game's Lua environment doesn't provide it
+    -- NOTE: no next() here - the game's Kahlua Lua doesn't provide it
+    -- (Kahlua's pairs is implemented natively, not via next, so pairs
+    -- is still fine)
     local kept = {}
     for id, reason in pairs(skipped) do
         kept[#kept + 1] = tostring(id) .. " (" .. tostring(reason) .. ")"

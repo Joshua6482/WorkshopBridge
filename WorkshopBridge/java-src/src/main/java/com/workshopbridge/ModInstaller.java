@@ -28,7 +28,10 @@ import java.util.function.Consumer;
  * Each mod is installed with an atomic swap: the new tree is copied to a
  * staging dir first, then two renames swing it live ({@code dest -> backup},
  * {@code staging -> dest}). A rename is atomic so should never leave a 
- * partially updated mod directory.
+ * partially updated mod directory. On Windows the rename can fail because
+ * the game holds the mods dir open; those cases fall back to a non-atomic
+ * in-place merge ({@link #mergeInPlace}), where a crash mid-merge can leave
+ * a mixed tree that the next update repairs.
  *
  * Staging and backup dirs live OUTSIDE the mods folder (in a stage dir under
  * the workshop cache): the game's own file watcher walks the mods tree, and
@@ -168,10 +171,12 @@ public final class ModInstaller {
     }
 
     private static void moveAtomic(Path from, Path to) throws IOException {
-        // A few retries: on Windows, Defender real-time scanning or the
-        // game's file watcher can briefly hold handles inside the tree being
-        // moved (transient AccessDeniedException). Harmless on Linux, where
-        // the first attempt almost always succeeds.
+        // Retries: on Windows, Defender real-time scanning can briefly hold
+        // handles inside the tree being moved. AccessDeniedException gets at
+        // most one 150ms retry - a persistent hold (e.g. the game's file
+        // watcher on the mods dir) will never clear, and lingering here just
+        // delays the mergeInPlace fallback; other IOExceptions keep 3 tries.
+        // Harmless on Linux, where the first attempt almost always succeeds.
         IOException last = null;
         for (int i = 0; i < 3; i++) {
             try {

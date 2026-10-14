@@ -1,6 +1,6 @@
 # WorkshopBridge Windows Test Pack
 
-DRAFT, uncommitted. Covers the PLAN.md validation item: steamcmd.exe
+Covers the PLAN.md validation item: steamcmd.exe
 bootstrap, paths with spaces, fresh-profile first run, and a normal play
 session on Windows, plus the features still awaiting in-game verification.
 

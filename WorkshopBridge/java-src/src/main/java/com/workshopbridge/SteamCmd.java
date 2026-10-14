@@ -504,8 +504,10 @@ public final class SteamCmd {
     /**
      * Suggests the FORK launch-mechanism flag when process spawning itself is
      * blocked (posix_spawn + EACCES, seen inside steam-run's bubblewrap
-     * sandbox). The mod tries to set this itself at load (see Main), but the
-     * JDK may have read the default already. Package-private for tests.
+     * sandbox). Setting it in code is not an option: the JDK freezes the
+     * mechanism on the first process launch, which happens before the mod
+     * loads, so it has to be a manual flag on the game's Java command line.
+     * Package-private for tests.
      */
     static String posixSpawnHint(String reason) {
         String low = reason == null ? "" : reason.toLowerCase(Locale.ROOT);

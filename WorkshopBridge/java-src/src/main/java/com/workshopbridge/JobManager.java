@@ -68,7 +68,8 @@ public final class JobManager {
         t.setDaemon(true);
         return t;
     });
-    // Concurrent downloads
+    // Downloads are serialized on a single thread (steamcmd emits no
+    // per-byte progress, and concurrent installs would fight over dirs)
     private final ExecutorService downloadExec = Executors.newSingleThreadExecutor(r -> {
         Thread t = new Thread(r, "workshopbridge-download");
         t.setDaemon(true);
@@ -361,8 +362,10 @@ public final class JobManager {
         job.message = "Downloading " + workshopId + "...";
         // Best-effort timestamp: we are downloading the latest content right
         // now, so on API failure the wall clock is the honest baseline (the
-        // next check then only flags genuinely newer uploads). Matches
-        // runUpdate's fallback.
+        // next check then only flags genuinely newer uploads). Note this is
+        // the opposite of runUpdate's fallback, which keeps the previously
+        // recorded timestamp (or 0) on API failure so a later check retries
+        // the comparison instead of wrongly considering us current.
         long nowSec = System.currentTimeMillis() / 1000L;
         long timeUpdated;
         try {

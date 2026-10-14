@@ -99,8 +99,10 @@ public final class ServerJoinMods {
     /**
      * Duplicates the connection-details buffer of the current
      * ConnectToServerState, rewound to the start. Null when no join is in
-     * progress. Pure reflection so this class loads (and the parser stays
-     * unit-testable) without the game on the classpath.
+     * progress. Pure reflection so this method works (and the parser stays
+     * unit-testable) without the game on the classpath; note
+     * {@link #annotateInstalled} does reference a game class directly, so the
+     * class as a whole still needs the game at runtime.
      */
     private static ByteBuffer connectionPacket() throws Exception {
         Class<?> c = Class.forName("zombie.gameStates.ConnectToServerState");

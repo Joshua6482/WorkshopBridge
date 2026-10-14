@@ -3,7 +3,7 @@ local fails = 0
 local function check(c, n, e)
     if c then print("PASS " .. n) else print("FAIL " .. n .. (e and " -- "..e or "")); fails = fails + 1 end
 end
-local f = assert(io.open(os.getenv("WB_STATUSES") or "/tmp/wb-luatest/java_statuses.txt"))
+local f = assert(io.open(os.getenv("WB_STATUSES")))
 local lines = {}
 for l in f:lines() do lines[#lines+1] = l end
 f:close()
