@@ -31,6 +31,9 @@ end
 function UIElement:initialise() end
 function UIElement:instantiate() end
 function UIElement:addChild(c) table.insert(self.children, c) end
+function UIElement:removeChild(c)
+    for i, k in ipairs(self.children) do if k == c then table.remove(self.children, i) break end end
+end
 function UIElement:setVisible(v) self.visible = v end
 function UIElement:isVisible() return self.visible end
 function UIElement:getWidth() return self.width end
@@ -143,8 +146,11 @@ check(dlg.titleLabel.labelText:find("MysteryMod") ~= nil, "dialog names the mod"
     dlg.titleLabel.labelText)
 
 local kidsBefore = #ms.children
-WB_ShowAdoptDialog(ms, "MysteryMod") -- again: must not stack duplicates
+WB_ShowAdoptDialog(ms, "MysteryMod") -- again: rebuilt fresh, not stacked
 check(#ms.children == kidsBefore, "no duplicate adopt dialogs", #ms.children)
+check(ms.wbAdoptDialog ~= dlg, "stale dialog replaced, not reused")
+check(dlg:isVisible() == false, "stale dialog hidden")
+dlg = ms.wbAdoptDialog -- the rebuilt dialog is the live one from here on
 
 -- invalid input: error shown, dialog stays open, no job started
 dlg.entry:setText("not a workshop id")

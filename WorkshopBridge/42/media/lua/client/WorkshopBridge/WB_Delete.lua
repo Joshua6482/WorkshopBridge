@@ -151,13 +151,14 @@ function WB_DeleteDialog:close()
     end
 end
 
--- Opens the dialog, centered on the ModSelector screen. Reuses the open
--- one instead of stacking duplicates.
+-- Opens the dialog, centered on the ModSelector screen. A stale dialog is
+-- never reused: it bakes in the previous call's modId/wsid/otherIds, so
+-- reusing it would delete the wrong mod. It is torn down and rebuilt
+-- below with the new arguments.
 function WB_ShowDeleteDialog(ms, modId, wsid, otherIds)
     if not ms or not modId then return end
     if ms.wbDeleteDialog then
-        ms.wbDeleteDialog:setVisible(true)
-        return
+        ms.wbDeleteDialog:close()
     end
     otherIds = otherIds or {}
     local shown = math.min(#otherIds, 8)

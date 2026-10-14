@@ -136,13 +136,14 @@ function WB_DependenciesDialog:close()
     end
 end
 
--- Opens the dialog, centered on the ModSelector screen. Reuses the open
--- one instead of stacking duplicates.
+-- Opens the dialog, centered on the ModSelector screen. A stale dialog is
+-- never reused: it bakes in the previous call's dependency list, so
+-- reusing it would install the wrong mods. It is torn down and rebuilt
+-- below with the new arguments.
 function WB_ShowDependenciesDialog(ms, deps)
     if not ms or not deps or #deps == 0 then return end
     if ms.wbDependenciesDialog then
-        ms.wbDependenciesDialog:setVisible(true)
-        return
+        ms.wbDependenciesDialog:close()
     end
     local shown = math.min(#deps, 8)
     local h = 12 + 24 + 26 + shown * 20

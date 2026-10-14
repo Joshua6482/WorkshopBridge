@@ -216,13 +216,14 @@ function WB_ServerModsDialog:close()
     end
 end
 
--- Opens the dialog centered on the ConnectToServer screen. Reuses the open
--- one instead of stacking duplicates.
+-- Opens the dialog centered on the ConnectToServer screen. A stale dialog
+-- is never reused: it bakes in the previous call's mod lists, so reusing
+-- it would download the wrong mods. It is torn down and rebuilt below
+-- with the new arguments.
 function WB_ShowServerModsDialog(screen, downloadable, manual)
     if not screen then return end
     if screen.wbServerModsDialog then
-        screen.wbServerModsDialog:setVisible(true)
-        return
+        screen.wbServerModsDialog:close()
     end
     downloadable = downloadable or {}
     manual = manual or {}

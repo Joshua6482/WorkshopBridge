@@ -174,15 +174,21 @@ check(dlg ~= nil, "dialog still opens without the Java API")
 dlg.deleteBtn.onclick() -- must not error
 check(flashed == WB_Text.DeleteFailed, "failed flash without the API", flashed)
 
--- ---------- 7. duplicate dialog reused ----------
+-- ---------- 7. stale dialog torn down and rebuilt, not reused ----------
 reset()
 wbGetModIds = function(wsid) return '["ModA","ModB"]' end
 wbDeleteMod = function(wsid, modId) return deleteResult end
 deleteResult = '{"deleted":["ModA","ModB"],"skipped":{},"failed":[]}'
-WB_OnDelete(panel)
+WB_OnDelete(panel) -- panel.wbModId = "ModB"
 local first = ms.wbDeleteDialog
-WB_OnDelete(panel)
-check(ms.wbDeleteDialog == first, "open dialog reused, not stacked")
+local kidsBefore = #ms.children
+WB_OnDelete({ wbModId = "ModA" }) -- different mod while the dialog is open
+local second = ms.wbDeleteDialog
+check(second ~= nil and second ~= first, "second show rebuilds the dialog")
+check(#ms.children == kidsBefore, "no duplicate dialogs stacked", #ms.children)
+check(labelText(second.modLabel):find("ModA"), "rebuilt dialog names the new mod",
+    labelText(second.modLabel))
+check(first:isVisible() == false, "stale dialog hidden")
 
 print("delete-dialog failures: " .. failures)
 os.exit(failures == 0 and 0 or 1)

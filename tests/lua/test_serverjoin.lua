@@ -209,12 +209,23 @@ fireConnectFailed(FAIL_MSG)
 check(screen.wbServerModsDialog == nil, "no dialog when screen not visible")
 screen.visible = true
 
--- ---------- 10. duplicate dialog not stacked ----------
+-- ---------- 10. stale dialog rebuilt fresh, not stacked ----------
 fireConnectFailed(FAIL_MSG)
 local dlg2 = screen.wbServerModsDialog
-fireConnectFailed(FAIL_MSG)
-check(screen.wbServerModsDialog == dlg2, "second failure reuses the dialog")
-if dlg2 then dlg2.closeBtn.onclick() end
+serverModsJson = serverMods({ smod("othermod", "222", "Other Mod", false) })
+fireConnectFailed("Mod required: Other Mod [ModID: othermod, WorkshopID: 222]")
+local dlg3 = screen.wbServerModsDialog
+check(dlg3 ~= nil and dlg3 ~= dlg2, "second failure rebuilds the dialog")
+check(dlg2:isVisible() == false, "stale dialog hidden")
+local labels3 = labelTexts(dlg3)
+check(#labels3 == 1 and labels3[1]:find("Other Mod") ~= nil,
+    "rebuilt dialog shows the new mod list", labels3[1])
+local stacked = 0
+for _, c in ipairs(screen.children) do
+    if c == dlg2 or c == dlg3 then stacked = stacked + 1 end
+end
+check(stacked == 1, "no duplicate dialogs stacked", stacked)
+if dlg3 then dlg3.closeBtn.onclick() end
 
 -- ---------- 11. offer option off -> silent ----------
 local realOfferOpt = WB_GetOfferServerModDownloads

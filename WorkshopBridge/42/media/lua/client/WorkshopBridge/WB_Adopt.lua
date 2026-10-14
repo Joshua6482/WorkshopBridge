@@ -95,13 +95,14 @@ function WB_AdoptDialog:close()
     end
 end
 
--- Opens the dialog, centered on the ModSelector screen. Reuses the open
--- one instead of stacking duplicates.
+-- Opens the dialog, centered on the ModSelector screen. A stale dialog is
+-- never reused: it bakes in the previous call's modId, so reusing it
+-- would adopt the wrong mod. It is torn down and rebuilt below with the
+-- new arguments.
 function WB_ShowAdoptDialog(ms, modId)
     if not ms or not modId then return end
     if ms.wbAdoptDialog then
-        ms.wbAdoptDialog:setVisible(true)
-        return
+        ms.wbAdoptDialog:close()
     end
     local w, h = 420, 170
     local dlg = WB_AdoptDialog:new(
