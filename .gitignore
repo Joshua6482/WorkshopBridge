@@ -37,3 +37,4 @@ WorkshopBridge/42/media/java/WorkshopBridge.jar.zbs
 
 # Release packaging output (./release.sh)
 dist/
+javac.*.args
