@@ -470,15 +470,16 @@ public final class ModInstaller {
         }
         for (int attempt = 0; attempt < 3; attempt++) {
             try {
-                Files.walk(path)
-                        .sorted(Comparator.reverseOrder())
-                        .forEach(p -> {
-                            try {
-                                Files.delete(p);
-                            } catch (IOException e) {
-                                throw new RuntimeException(e);
-                            }
-                        });
+                try (var stream = Files.walk(path)) {
+                    stream.sorted(Comparator.reverseOrder())
+                            .forEach(p -> {
+                                try {
+                                    Files.delete(p);
+                                } catch (IOException e) {
+                                    throw new RuntimeException(e);
+                                }
+                            });
+                }
                 return;
             } catch (RuntimeException e) {
                 if (attempt == 2 || !Files.exists(path)) {
