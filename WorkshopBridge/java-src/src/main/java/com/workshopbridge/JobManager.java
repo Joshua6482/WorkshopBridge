@@ -12,6 +12,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.function.Consumer;
@@ -75,7 +76,7 @@ public final class JobManager {
         t.setDaemon(true);
         return t;
     });
-    private final ConcurrentHashMap<String, Job> jobs = new ConcurrentHashMap<>();
+    private final ConcurrentMap<String, Job> jobs = new ConcurrentHashMap<>();
     /** The currently running check job, if any: repeat clicks coalesce onto it. */
     private volatile Job activeCheck;
 
@@ -460,6 +461,8 @@ public final class JobManager {
         }
         job.message = imported == 1 ? "Imported 1 mod" : "Imported " + imported + " mods";
         if (!skipped.isEmpty()) {
+            // Single writer (this worker thread); volatile is only for
+            // visibility to the polling Lua thread, so += is safe here.
             job.message += " (" + skipped.size() + " skipped: no longer listed - "
                     + String.join(", ", skipped) + ")";
         }

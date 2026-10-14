@@ -19,7 +19,7 @@ function WB_CheckDependencies(ms, workshopId)
     print("[WorkshopBridge] checking dependencies for " .. tostring(workshopId)
         .. " (job " .. tostring(jobId) .. ")")
     WB_TrackJob(jobId, {
-        onUpdate = function(st)
+        onUpdate = function()
             WB_ShowProgress(ms, WB_Text.CheckingDependencies)
         end,
         onDone = function(st)
@@ -46,7 +46,6 @@ WB_DependenciesDialog = ISPanel:derive("WB_DependenciesDialog")
 -- instantiate().
 function WB_DependenciesDialog:buildControls()
     local pad = 12
-    local w = self:getWidth()
     local y = pad
     self.titleLabel = ISLabel:new(pad, y, 20, WB_Text.DependenciesTitle,
         1, 1, 1, 1, UIFont.Small, true)

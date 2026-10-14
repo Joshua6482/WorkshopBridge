@@ -112,6 +112,7 @@ public final class WorkshopDependencies {
     }
 
     /** One page's direct dependencies; the unit injectable for tests. */
+    @FunctionalInterface
     interface DepFetcher {
         List<Dep> fetch(String workshopId) throws IOException;
     }

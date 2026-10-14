@@ -124,6 +124,9 @@ resolve_pz_java "${1:-}"
 # Expand a leading ~ (env-provided paths are not tilde-expanded by the
 # shell), but only a bare ~ or ~/: ~user/ must keep referring to that
 # user's home, not $HOME/user.
+# shellcheck disable=SC2088
+# (the tildes below are intentionally quoted; they are literal string
+# matches in a case pattern, not expansion sites)
 case "$PZ_JAVA" in
     "~") PZ_JAVA="$HOME" ;;
     "~/"*) PZ_JAVA="$HOME/${PZ_JAVA#"~/"}" ;;

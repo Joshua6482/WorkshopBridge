@@ -47,7 +47,6 @@ WB_DeleteDialog = ISPanel:derive("WB_DeleteDialog")
 -- instantiate().
 function WB_DeleteDialog:buildControls()
     local pad = 12
-    local w = self:getWidth()
     local y = pad
     self.titleLabel = ISLabel:new(pad, y, 20, WB_Text.DeleteModTitle,
         1, 1, 1, 1, UIFont.Small, true)

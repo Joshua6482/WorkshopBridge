@@ -159,7 +159,7 @@ public final class SteamCmd {
         overrideError = null;
         String override = readOverride();
         if (override != null) {
-            if (override.equals("~") || override.startsWith("~/")) {
+            if ("~".equals(override) || override.startsWith("~/")) {
                 override = System.getProperty("user.home") + override.substring(1);
             }
             File f = new File(override);
@@ -643,7 +643,7 @@ public final class SteamCmd {
     static boolean isNixOSRelease(String osRelease) {
         for (String line : osRelease.split("\n")) {
             String t = line.trim();
-            if (t.equals("ID=nixos") || t.equals("ID_LIKE=nixos")) {
+            if ("ID=nixos".equals(t) || "ID_LIKE=nixos".equals(t)) {
                 return true;
             }
         }
@@ -1058,28 +1058,30 @@ public final class SteamCmd {
 
     private static void copyN(InputStream in, OutputStream out, long n) throws IOException {
         byte[] buf = new byte[8192];
-        while (n > 0) {
-            int want = (int) Math.min(buf.length, n);
+        long remaining = n;
+        while (remaining > 0) {
+            int want = (int) Math.min(buf.length, remaining);
             int got = in.read(buf, 0, want);
             if (got == -1) {
                 throw new EOFException("truncated tar entry data");
             }
             out.write(buf, 0, got);
-            n -= got;
+            remaining -= got;
         }
     }
 
     private static void skipFully(InputStream in, long n) throws IOException {
-        while (n > 0) {
-            long skipped = in.skip(n);
+        long remaining = n;
+        while (remaining > 0) {
+            long skipped = in.skip(remaining);
             if (skipped <= 0) {
                 // skip() may return 0; fall back to reading
                 if (in.read() == -1) {
                     throw new EOFException("truncated tar entry data");
                 }
-                n--;
+                remaining--;
             } else {
-                n -= skipped;
+                remaining -= skipped;
             }
         }
     }

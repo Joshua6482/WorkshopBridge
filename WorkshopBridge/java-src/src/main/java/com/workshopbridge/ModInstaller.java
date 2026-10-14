@@ -344,10 +344,11 @@ public final class ModInstaller {
         Map<String, String> baseNames = new HashMap<>();
         collectPairs(modsDir, news, olds, baseNames);
         collectPairs(stageDir, news, olds, baseNames);
-        for (String tag : baseNames.keySet()) {
+        for (Map.Entry<String, String> entry : baseNames.entrySet()) {
+            String tag = entry.getKey();
             Path staging = news.get(tag);
             Path backup = olds.get(tag);
-            Path dest = modsDir.resolve(baseNames.get(tag));
+            Path dest = modsDir.resolve(entry.getValue());
             try {
                 if (staging != null && backup != null && !Files.exists(dest)) {
                     // crash between the two renames: staging is a complete

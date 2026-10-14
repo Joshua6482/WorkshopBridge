@@ -96,7 +96,7 @@ public final class ModDeleter {
                 skipped.put(modId, reason);
                 continue;
             }
-            File dir = new File(gameModDir(backend, modId));
+            File dir = new File(gameModDir(modId));
             log.accept("Deleting mod folder " + dir.getName() + " (" + modId + ")");
             ModInstaller.deleteRecursiveQuiet(dir.toPath(), log);
             if (dir.exists()) {
@@ -118,7 +118,7 @@ public final class ModDeleter {
         if (modId == null || modId.isEmpty()) {
             return "blank mod id";
         }
-        String dir = gameModDir(backend, modId);
+        String dir = gameModDir(modId);
         if (dir == null) {
             return "mod folder not found";
         }
@@ -153,7 +153,7 @@ public final class ModDeleter {
     }
 
     /** The folder the game resolves for a mod id, or null. Never throws. */
-    private static String gameModDir(Backend backend, String modId) {
+    private static String gameModDir(String modId) {
         try {
             return zombie.ZomboidFileSystem.instance.getModDir(modId);
         } catch (Throwable t) {
