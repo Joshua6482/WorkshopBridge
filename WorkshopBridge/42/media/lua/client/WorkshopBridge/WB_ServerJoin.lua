@@ -45,7 +45,11 @@ function WB_OnConnectFailed(message)
     if not modId then return end
     if type(wbGetServerMods) ~= "function" then return end
     local ok, json = pcall(wbGetServerMods)
-    local data = (ok and json) and WB_JsonDecode(json) or nil
+    local data = nil
+    if ok and json then
+        local ok2, decoded = pcall(WB_JsonDecode, json)
+        if ok2 then data = decoded end
+    end
     if data and data.steamMode then return end -- vanilla workshop flow owns it
     local entries = (data and type(data.mods) == "table") and data.mods or {}
     if #entries == 0 and wsId then
