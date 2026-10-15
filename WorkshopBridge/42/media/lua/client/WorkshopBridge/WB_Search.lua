@@ -115,6 +115,15 @@ function WB_SearchDialog:buildControls()
     self.searchEntry.onCommandEntered = function() self:onSearchClicked() end
     self:addChild(self.searchEntry)
 
+    -- 'x' clear button tucked inside the entry's right edge
+    local clearW = 22
+    self.clearBtn = ISButton:new(pad + entryW - clearW - 2, pad + 2, clearW, 22,
+        "x", self, function() self:onClearSearch() end)
+    self.clearBtn:initialise()
+    self.clearBtn:instantiate()
+    self.clearBtn:setFont(UIFont.Small)
+    self:addChild(self.clearBtn)
+
     self.searchBtn = ISButton:new(pad + entryW + 8, pad, searchBtnW, 28,
         WB_Text.Search, self, function() self:onSearchClicked() end)
     self.searchBtn:initialise()
@@ -236,6 +245,19 @@ function WB_SearchDialog:setStatus(text)
     if self.statusLabel and self.statusLabel.setName then
         self.statusLabel:setName(tostring(text or ""))
     end
+end
+
+function WB_SearchDialog:onClearSearch()
+    self.searchActive = false -- stop any in-flight page chain
+    self.searchGen = self.searchGen + 1
+    self.results = {}
+    self.selectedResult = nil
+    if self.searchEntry.setText then
+        self.searchEntry:setText("")
+    end
+    self:renderResults()
+    self:showDetails(nil)
+    self:setStatus("")
 end
 
 function WB_SearchDialog:onSearchClicked()

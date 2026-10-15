@@ -335,5 +335,12 @@ WB_ShowSearchDialog(ms) -- closed: button reopens it
 check(dlg:isVisible() ~= false, "button reopens closed dialog")
 check(dlg.searchEntry:getText() == "test", "term survives toggle")
 
+-- ---------- 13. clear button resets the search ----------
+check(dlg.clearBtn ~= nil, "clear button exists")
+dlg.clearBtn.onclick()
+check(dlg.searchEntry:getText() == "", "clear empties the entry")
+check(#dlg.results == 0, "clear empties results")
+check(dlg.selectedResult == nil, "clear drops selection")
+
 if failures == 0 then print("ALL SEARCH TESTS PASSED") end
 os.exit(failures == 0 and 0 or 1)
