@@ -186,12 +186,15 @@ function WB_SearchDialog:buildControls()
     y = y + 24
     local btnH = 28
     local descH = h - y - pad - btnH - 8
-    -- ISRichTextPanel: the vanilla scrollable read-only text widget (with
-    -- a real scrollbar); the multiline text entry scrolled unclamped.
-    self.descPanel = ISRichTextPanel:new(dx, y, dw, descH)
-    self.descPanel:initialise()
-    self.descPanel:instantiate()
-    self:addChild(self.descPanel)
+    -- ISTextEntryBox (read-only, multiline): ISRichTextPanel's text API
+    -- varies by build and stayed blank, so back to the widget that
+    -- provably renders. Scroll clamp handled in onMouseWheel below.
+    self.descBox = ISTextEntryBox:new("", dx, y, dw, descH)
+    self.descBox:initialise()
+    self.descBox:instantiate()
+    self.descBox:setMultipleLine(true)
+    if self.descBox.setEditable then self.descBox:setEditable(false) end
+    self:addChild(self.descBox)
 
     self.installBtn = ISButton:new(dx, h - pad - btnH, 140, btnH,
         WB_Text.Install, self, function() self:onInstallClicked() end)
@@ -382,19 +385,6 @@ function WB_SearchDialog:onSortClicked()
     self:renderResults()
 end
 
--- ISRichTextPanel's text API varies across builds: try setText first,
--- fall back to the raw field plus an explicit repaginate.
-local function setDescriptionText(panel, text)
-    if not panel then return end
-    text = tostring(text or "")
-    if panel.setText then
-        panel:setText(text)
-        return
-    end
-    panel.text = text
-    if panel.paginate then pcall(panel.paginate, panel) end
-end
-
 function WB_SearchDialog:showDetails(r)
     self.selectedResult = r
     local title = r and (r.title ~= "" and r.title or r.id) or ""
@@ -411,7 +401,9 @@ function WB_SearchDialog:showDetails(r)
     if self.detailTags.setName then
         self.detailTags:setName(WB_Truncate(tags, 64))
     end
-    setDescriptionText(self.descPanel, r and r.description or "")
+    if self.descBox.setText then
+        self.descBox:setText(r and r.description or "")
+    end
     self:updateInstallButton()
 end
 

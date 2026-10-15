@@ -62,11 +62,6 @@ function ISTextEntryBox:getText() return self.text end
 function ISTextEntryBox:setText(t) self.text = t end
 function ISTextEntryBox:setMultipleLine(m) self.multiLine = m end
 function ISTextEntryBox:setEditable(e) self.editable = e end
-ISRichTextPanel = UIElement:derive("ISRichTextPanel")
--- NOTE: deliberately no setText here: the real PZ widget lacks it, so the
--- mod must fall back to .text + paginate()
-function ISRichTextPanel:paginate() self.paginated = true end
-function ISRichTextPanel:getText() return self.text end
 ISScrollingListBox = UIElement:derive("ISScrollingListBox")
 function ISScrollingListBox:new(x, y, w, h)
     local o = UIElement.new(self, x, y, w, h)
@@ -190,8 +185,7 @@ check(dlg.detailStats.name:find("95%% positive") ~= nil, "stats line shows ratin
 check(dlg.detailStats.name:find("1.2k subscribers") ~= nil, "stats line shows subscribers",
     dlg.detailStats.name)
 check(dlg.detailTags.name == "Mod", "tags shown", dlg.detailTags.name)
-check(dlg.descPanel:getText() == "A test mod.", "description shown")
-check(dlg.descPanel.paginated == true, "description repaginated")
+check(dlg.descBox:getText() == "A test mod.", "description shown")
 
 -- ---------- 4. install button states ----------
 -- row 2 (Beta Mod, id 222) is selected and not installed
