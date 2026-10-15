@@ -63,6 +63,7 @@ local function WB_TrackImportJob(ms, jobId, what)
         .. ", job " .. tostring(jobId) .. ")")
     local lastInvalidated = 0
     WB_TrackJob(jobId, {
+        description = "import " .. tostring(what),
         onUpdate = function(st)
             WB_ShowProgress(ms, st.message or WB_Text.Importing)
             local done = st and tonumber(st.done) or 0

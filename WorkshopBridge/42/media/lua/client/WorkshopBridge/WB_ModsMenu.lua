@@ -132,6 +132,7 @@ local function WB_OnCheckAll(ms)
     end
     print("[WorkshopBridge] check for updates started (job " .. tostring(jobId) .. ")")
     WB_TrackJob(jobId, {
+        description = "check for updates",
         onUpdate = function(st)
             WB_ShowProgress(ms, st.message or WB_Text.Checking)
         end,
@@ -180,6 +181,7 @@ local function WB_OnUpdateAll(ms)
     end
     print("[WorkshopBridge] update-all started (job " .. tostring(jobId) .. ")")
     WB_TrackJob(jobId, {
+        description = "update all mods",
         onUpdate = function(st)
             WB_ShowProgress(ms, st.message or WB_Text.Updating)
         end,
@@ -251,6 +253,8 @@ local function WB_OnModUpdate(panel)
     print("[WorkshopBridge] updating " .. tostring(modId)
         .. " (workshop " .. tostring(wsid) .. ", job " .. tostring(jobId) .. ")")
     WB_TrackJob(jobId, {
+        description = "update " .. tostring(modId)
+            .. " (workshop " .. tostring(wsid) .. ")",
         onUpdate = function(st)
             local msg = (st and st.message) or WB_Text.Updating
             local j = wbModJobs[wsid]

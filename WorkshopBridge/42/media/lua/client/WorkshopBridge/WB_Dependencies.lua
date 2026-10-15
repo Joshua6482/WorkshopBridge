@@ -19,6 +19,7 @@ function WB_CheckDependencies(ms, workshopId)
     print("[WorkshopBridge] checking dependencies for " .. tostring(workshopId)
         .. " (job " .. tostring(jobId) .. ")")
     WB_TrackJob(jobId, {
+        description = "check dependencies for " .. tostring(workshopId),
         onUpdate = function()
             WB_ShowProgress(ms, WB_Text.CheckingDependencies)
         end,
@@ -107,6 +108,7 @@ function WB_DependenciesDialog:onInstallClicked()
     print("[WorkshopBridge] installing " .. tostring(#ids)
         .. " dependencies (job " .. tostring(jobId) .. ")")
     WB_TrackJob(jobId, {
+        description = "install " .. tostring(#ids) .. " dependencies",
         onUpdate = function(st)
             WB_ShowProgress(ms, st.message or WB_Text.Importing)
         end,

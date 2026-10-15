@@ -72,6 +72,7 @@ function WB_DownloadDialog:onDownloadClicked()
     print("[WorkshopBridge] download started for workshop item " .. tostring(wsid)
         .. " (job " .. tostring(jobId) .. ")")
     WB_TrackJob(jobId, {
+        description = "download workshop item " .. tostring(wsid),
         onUpdate = function(st)
             WB_ShowProgress(ms, st.message or WB_Text.Downloading)
         end,

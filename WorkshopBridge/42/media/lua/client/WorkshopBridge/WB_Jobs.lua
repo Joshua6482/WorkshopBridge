@@ -62,7 +62,9 @@ local currentJob = nil      -- jobId whose poll callback is currently running
 local panelOwner = nil      -- jobId owning the shared progress panel, if any
 
 -- ---------- job tracking ----------
-
+-- callbacks: { onUpdate=fn, onDone=fn, description="human-readable label" }.
+-- The description appears in the job transition log; omit it and the log
+-- falls back to the raw state format.
 function WB_TrackJob(jobId, callbacks)
     if not jobId then return end
     if pollActive then
@@ -145,8 +147,22 @@ function WB_PollJobs()
         currentJob = jobId
         if type(st) == "table" then
             if lastJobState[jobId] ~= st.state then
-                print("[WorkshopBridge] job " .. tostring(jobId) .. " state: "
-                    .. tostring(lastJobState[jobId]) .. " -> " .. tostring(st.state))
+                local desc = cb.description
+                    and (" \"" .. tostring(cb.description) .. "\"") or ""
+                local from, to = lastJobState[jobId], st.state
+                if desc ~= "" then
+                    local verb = to == "running" and "started"
+                        or to == "done" and "finished"
+                        or to == "failed" and "failed"
+                        or ("state " .. tostring(from)
+                            .. " -> " .. tostring(to))
+                    print("[WorkshopBridge] job " .. tostring(jobId)
+                        .. desc .. " " .. verb)
+                else
+                    print("[WorkshopBridge] job " .. tostring(jobId)
+                        .. " state: " .. tostring(from)
+                        .. " -> " .. tostring(to))
+                end
                 lastJobState[jobId] = st.state
             end
             if cb.onUpdate then pcall(cb.onUpdate, st) end

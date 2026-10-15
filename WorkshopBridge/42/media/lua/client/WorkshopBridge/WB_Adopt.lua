@@ -62,6 +62,8 @@ function WB_AdoptDialog:onAdoptClicked()
         .. " as workshop item " .. tostring(wsid)
         .. " (job " .. tostring(jobId) .. ")")
     WB_TrackJob(jobId, {
+        description = "adopt " .. tostring(modId)
+            .. " as workshop item " .. tostring(wsid),
         onUpdate = function(st)
             WB_ShowProgress(ms, st.message or WB_Text.Adopting)
         end,

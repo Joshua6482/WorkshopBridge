@@ -189,6 +189,7 @@ function WB_ServerModsDialog:onDownloadClicked()
     print("[WorkshopBridge] downloading " .. tostring(#ids)
         .. " server mod(s) (job " .. tostring(jobId) .. ")")
     WB_TrackJob(jobId, {
+        description = "download " .. tostring(#ids) .. " server mod(s)",
         onUpdate = function(st)
             WB_SetLabel(self.statusLabel,
                 (st and st.message) or WB_Text.ServerModsDownloading)

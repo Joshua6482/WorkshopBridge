@@ -286,6 +286,8 @@ function WB_SearchDialog:fetchNextPage()
     local gen = self.searchGen
     local page = self.page
     WB_TrackJob(jobId, {
+        description = "workshop search page " .. tostring(page)
+            .. " for " .. tostring(self.query),
         onUpdate = function(st)
             if dlg.searchActive and dlg.searchGen == gen then
                 dlg:setStatus(st and st.message or WB_Text.Searching)
@@ -466,6 +468,7 @@ function WB_SearchDialog:onInstallClicked()
     self:renderResults() -- row shows the installing indicator
     local dlg = self
     WB_TrackJob(jobId, {
+        description = "install workshop item " .. tostring(r.id),
         onUpdate = function(st)
             dlg:setStatus(st and st.message or WB_Text.Importing)
         end,
