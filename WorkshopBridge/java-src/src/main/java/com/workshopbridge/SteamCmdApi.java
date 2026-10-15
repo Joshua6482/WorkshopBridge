@@ -219,14 +219,17 @@ public final class SteamCmdApi {
     }
 
     /**
-     * Starts a workshop search job for the given name query.
-     * Returns a job id, or null on failure.
+     * Starts a workshop search job for one browse page of the name query.
+     * Lua chains page jobs (1, 2, ...) until a page yields no new ids, so
+     * results stream into the UI. Returns a job id, or null on failure.
      */
     @LuaMethod(name = "wbSearchWorkshop", global = true)
-    public static String wbSearchWorkshop(String query) {
+    public static String wbSearchWorkshop(String query, double page) {
         try {
             if (query == null || query.trim().isEmpty()) return null;
-            return Backend.get().jobs().submitSearch(query.trim());
+            int p = (int) page;
+            if (p < 1 || p > 10) return null;
+            return Backend.get().jobs().submitSearch(query.trim(), p);
         } catch (Throwable t) {
             return null;
         }

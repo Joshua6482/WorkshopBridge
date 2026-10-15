@@ -422,34 +422,42 @@ public class WBTest {
                 "search: entities unescaped, url tag stripped");
         check("".equals(WorkshopSearch.stripBbcode(null)),
                 "search: null description -> empty");
-        // searchIds paging with an injected fetcher (page 2 empty -> stop)
+        // searchPage with an injected fetcher: query/page plumbed through,
+        // same page twice hits the cache. Empty result pages exercise no
+        // network (enrich short-circuits); the id->item path is covered by
+        // the job-level test below with a real stub server.
         WorkshopSearch.clearCaches();
-        java.util.Map<Integer, String> pages = new java.util.HashMap<>();
-        pages.put(1, mixedLinks);
-        pages.put(2, "<div class=\"workshop\">no more here</div>");
         java.util.concurrent.atomic.AtomicInteger fetchCount =
                 new java.util.concurrent.atomic.AtomicInteger(0);
-        java.util.List<String> paged = WorkshopSearch.searchIds("test",
-                (q, p) -> {
-                    fetchCount.incrementAndGet();
-                    check("test".equals(q), "search: fetcher gets the query", q);
-                    return pages.getOrDefault(p, "");
-                }, null);
-        check(paged.size() == 1 && "111".equals(paged.get(0)),
-                "search: pages merged, stops on empty page", paged);
-        check(fetchCount.get() == 2, "search: fetched exactly 2 pages",
+        WorkshopSearch.PageFetcher fetcher = (q, p) -> {
+            fetchCount.incrementAndGet();
+            if (!"test".equals(q) || p != 1) {
+                throw new AssertionError("fetcher got wrong args: " + q + "/" + p);
+            }
+            return "<div class=\"workshop\">no more here</div>";
+        };
+        java.util.List<WorkshopSearch.Item> page1 =
+                WorkshopSearch.searchPage("test", 1, fetcher);
+        check(page1.isEmpty(), "search: empty page -> no items");
+        check(fetchCount.get() == 1, "search: page fetched once", fetchCount.get());
+        WorkshopSearch.searchPage("test", 1, fetcher);
+        check(fetchCount.get() == 1, "search: repeat page served from cache",
                 fetchCount.get());
-        java.util.List<String> cached = WorkshopSearch.searchIds("test",
-                (q, p) -> { throw new AssertionError("must not refetch"); }, null);
-        check(cached.equals(paged), "search: repeat query served from cache");
         WorkshopSearch.clearCaches();
         boolean threwEmpty = false;
         try {
-            WorkshopSearch.search("   ", null);
+            WorkshopSearch.searchPage("   ", 1);
         } catch (IllegalArgumentException e) {
             threwEmpty = true;
         }
         check(threwEmpty, "search: blank query rejected");
+        boolean threwPage = false;
+        try {
+            WorkshopSearch.searchPage("test", 0);
+        } catch (IllegalArgumentException e) {
+            threwPage = true;
+        }
+        check(threwPage, "search: page 0 rejected");
         // details parsing
         String detailsJson = "{\"response\":{\"publishedfiledetails\":["
                 + "{\"publishedfileid\":\"111\",\"result\":1,\"title\":\"Stub Mod\","
@@ -1003,7 +1011,7 @@ public class WBTest {
             System.setProperty("workshopbridge.workshopBrowseUrl",
                     "http://127.0.0.1:" + apiPort + "/browse");
             WorkshopSearch.clearCaches();
-            String searchJobId = jobs.submitSearch("stub query");
+            String searchJobId = jobs.submitSearch("stub query", 1);
             Map<String, Object> searchSt = awaitDone(jobs, searchJobId);
             check("done".equals(searchSt.get("state")),
                     "search job completes", searchSt.get("state"));

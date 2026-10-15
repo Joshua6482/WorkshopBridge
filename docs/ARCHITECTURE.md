@@ -56,7 +56,7 @@ gracefully on other ZombieBuddy versions.
 | `wbGetJobStatus(jobId)` | jobId | **JSON string** `{"state","done","total","message"[,"error"][,"updates"]}`, or null for unknown jobs. Lua decodes it with `WB_Json.lua`; Kahlua Java-object marshaling is not relied on.
 | `wbOpenWorkshopPage(workshopId)` | workshop ID | `true` if a browser launches. Tries `java.awt.Desktop.browse()`, then `xdg-open`/`gio open` (Linux), `open` (macOS), or `cmd /c start` (Windows). Validates the ID as digits before using it in a command |
 | `wbCheckDependencies(workshopId)` | workshop ID | jobId; resolves the item's workshop "required items" (transitively, best-effort page scrape); the job's `deps` status field lists `{id, title, installed}` |
-| `wbSearchWorkshop(query)` | name query | jobId; scrapes the public workshop browse pages for the query (BOIII-style: browse HTML -> regex ids -> keyless `GetPublishedFileDetails`), 10 pages max, ~1s between fetches, 10-min search cache / 1-h details cache, stops on HTTP 429; the job's `results` status field lists `{id, title, description, tags, subscribers, rating, fileSize, timeUpdated, previewUrl, installed}` |
+| `wbSearchWorkshop(query, page)` | name query + 1-based browse page | jobId; scrapes one public workshop browse page for the query (BOIII-style: browse HTML -> regex ids -> keyless `GetPublishedFileDetails`), with a global ~1s gap between fetches and a 10-min per-page cache; Lua chains page jobs until a page yields no new ids so results stream in. The job's `results` status field lists `{id, title, description, tags, subscribers, rating, fileSize, timeUpdated, previewUrl, installed}` for that page |
 | `wbGetServerMods()` | - | **JSON string** `{"steamMode", "mods":[{"id","workshopId","name","installed"}]}` read from the failed join's `connectionDetails` packet (deterministic parse, magic-int validated; `steamMode=true` means the vanilla workshop flow owns it), or null when there is no join to read or the packet is unrecognized |
 | `wbGetModIds(workshopId)` | workshop ID | **JSON string** array of the mod IDs recorded for the item, or null when untracked. Used by the delete dialog to list sub-mods |
 | `wbDeleteMod(workshopId, modId)` | workshop ID (nil/empty for manual mods) + PZ mod id | **JSON string** `{"deleted":[],"skipped":{"id":"reason"},"failed":[]}`. With a tracked ID, deletes every mod folder in the entry and drops the entry (so update-all can't resurrect it); otherwise deletes one manually-installed folder. Every folder passes `ModDeleter`'s guards or is reported, never silently removed |
@@ -73,7 +73,7 @@ gracefully on other ZombieBuddy versions.
     deps = {                        -- deps jobs only: required items
         { id = "123", title = "Some Library", installed = false }, ...
     },
-    results = {                     -- search jobs only: workshop hits
+    results = {                     -- search jobs only: this page's hits
         { id = "123", title = "Some Mod", description = "...",
           tags = { "Mod" }, subscribers = 1234, rating = 0.95,
           fileSize = 1048576, timeUpdated = 1780000000,

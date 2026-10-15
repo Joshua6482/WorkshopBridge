@@ -95,11 +95,11 @@ local ms = setmetatable({ x = 0, y = 0, width = 1280, height = 720, children = {
 -- ---------- stub Java API ----------
 local statuses = {}
 local searchJobSeq = 0
-local lastSearchQuery = nil
+local searchCalls = {}   -- {query, page} per call, in order
 local importCsv = nil
-function wbSearchWorkshop(q)
+function wbSearchWorkshop(q, page)
     searchJobSeq = searchJobSeq + 1
-    lastSearchQuery = q
+    searchCalls[#searchCalls + 1] = { query = q, page = page }
     return "searchjob" .. searchJobSeq
 end
 function wbGetJobStatus(jobId) return statuses[jobId] end
@@ -111,14 +111,10 @@ function wbImportMods(csv)
 end
 function WB_RefreshModList(m) end
 
-local function searchStatus(resultsJson)
-    return '{"state":"done","done":1,"total":1,"message":"2 mod(s) found",'
-        .. '"updates":[],"deps":[],"results":[' .. table.concat(resultsJson, ",") .. "]}"
-end
-local function hit(id, title, installed)
+local function hit(id, title, installed, subs, updated)
     return '{"id":"' .. id .. '","title":"' .. title .. '",'
-        .. '"description":"A test mod.","tags":["Mod"],"subscribers":1234,'
-        .. '"rating":0.95,"fileSize":1048576,"timeUpdated":1780000000,'
+        .. '"description":"A test mod.","tags":["Mod"],"subscribers":' .. (subs or 1234) .. ','
+        .. '"rating":0.95,"fileSize":1048576,"timeUpdated":' .. (updated or 1780000000) .. ','
         .. '"previewUrl":"","installed":' .. (installed and "true" or "false") .. "}"
 end
 
@@ -135,22 +131,34 @@ check(dlg.installBtn.title == WB_Text.Install, "install button title")
 -- ---------- 2. empty query does not call the bridge ----------
 dlg.searchEntry:setText("   ")
 dlg:onSearchClicked()
-check(lastSearchQuery == nil, "empty query never reaches the bridge")
+check(#searchCalls == 0, "empty query never reaches the bridge")
 check(dlg.statusLabel.name == WB_Text.SearchEnterQuery, "empty query shows hint")
 
--- ---------- 3. search -> results -> details ----------
-statuses["searchjob1"] = searchStatus({
+-- ---------- 3. search streams pages: 2 hits, then no new ids -> stop ----------
+local function pageStatus(resultsJson, n)
+    return '{"state":"done","done":1,"total":1,"message":"page done",'
+        .. '"updates":[],"deps":[],"results":[' .. table.concat(resultsJson, ",") .. "]}"
+end
+statuses["searchjob1"] = pageStatus({
     hit("111", "Alpha Mod", true),
     hit("222", "Beta Mod", false),
 })
+statuses["searchjob2"] = pageStatus({}) -- no new ids: last page
 dlg.searchEntry:setText("test")
 dlg:onSearchClicked()
-tick(2)
-check(lastSearchQuery == "test", "query passed to the bridge", lastSearchQuery)
+tick(2) -- page 1 job completes -> page 2 starts
+check(#searchCalls == 2, "page 2 chained after page 1",
+    #searchCalls)
+check(searchCalls[1].query == "test" and searchCalls[1].page == 1,
+    "page 1 requested with query", searchCalls[1].page)
+check(searchCalls[2].page == 2, "page 2 requested")
+tick(2) -- page 2 job completes -> chain stops
+check(#searchCalls == 2, "chain stops when a page yields nothing new")
 check(#dlg.resultList.items == 2, "two results listed", #dlg.resultList.items)
 check(dlg.resultList.items[1].item.id == "111", "first result id")
 check(dlg.detailTitle.name == "Alpha Mod", "first result auto-selected in details",
     dlg.detailTitle.name)
+check(dlg.statusLabel.name == "", "status cleared when done")
 -- select the second row via the update() poll (as a real click would)
 dlg.resultList.selected = 2
 dlg:update()
@@ -170,34 +178,95 @@ tick(2)
 check(dlg.statusLabel.name == WB_Text.Imported, "import success shown")
 check(dlg.results[2].installed == true, "installed flag refreshed on the hit")
 
--- ---------- 5. failed search shows the error ----------
+-- ---------- 5. failed first page shows the error ----------
 dlg.searchEntry:setText("boom")
-statuses["searchjob2"] =
+statuses["searchjob3"] =
     '{"state":"failed","done":0,"total":1,"message":"","error":"Steam is rate-limiting",'
     .. '"updates":[],"deps":[],"results":[]}'
 dlg:onSearchClicked()
 tick(2)
 check(dlg.statusLabel.name:find(WB_Text.SearchFailed) ~= nil, "failed search shows error",
     dlg.statusLabel.name)
+check(#searchCalls == 3, "no page 2 after a failed page 1")
 
 -- ---------- 6. no results ----------
 dlg.searchEntry:setText("nada")
-statuses["searchjob3"] =
-    '{"state":"done","done":1,"total":1,"message":"No mods found","updates":[],"deps":[],"results":[]}'
+statuses["searchjob4"] = pageStatus({})
 dlg:onSearchClicked()
 tick(2)
 check(dlg.statusLabel.name == WB_Text.NoResults, "empty results message")
+check(#searchCalls == 4, "no page 2 when page 1 is empty")
 
--- ---------- 7. no Java API -> no crash ----------
+-- ---------- 7. sort cycles through orders ----------
+statuses["searchjob5"] = pageStatus({
+    hit("a", "Low Sub", false, 100, 1790000000),
+    hit("b", "High Sub", false, 50000, 1700000000),
+    hit("c", "Mid Sub", false, 5000, 1750000000),
+})
+statuses["searchjob6"] = pageStatus({})
+dlg.searchEntry:setText("sort me")
+dlg:onSearchClicked()
+tick(4) -- page 1 -> page 2 (empty) -> done
+local function shownIds()
+    local t = {}
+    for _, it in ipairs(dlg.resultList.items) do t[#t + 1] = it.item.id end
+    return table.concat(t, ",")
+end
+check(shownIds() == "a,b,c", "default sort is relevance (arrival order)", shownIds())
+check(dlg.sortBtn.title:find("Relevance") ~= nil, "sort button shows relevance")
+dlg.sortBtn.onclick() -- most subscribed
+check(shownIds() == "b,c,a", "sort by subscribers", shownIds())
+check(dlg.sortBtn.title:find("Most subscribed") ~= nil, "sort button shows subscribers")
+-- selection survives re-sort: Beta... select "c", re-sort, still "c"
+for i, it in ipairs(dlg.resultList.items) do
+    if it.item.id == "c" then dlg.resultList.selected = i; break end
+end
+dlg:update()
+check(dlg.detailTitle.name == "Mid Sub", "selected c")
+dlg.sortBtn.onclick() -- recently updated
+check(shownIds() == "a,c,b", "sort by updated", shownIds())
+check(dlg.detailTitle.name == "Mid Sub", "selection preserved across re-sort")
+dlg.sortBtn.onclick() -- top rated (all 0.95: tiebreak by subscribers)
+check(shownIds() == "b,c,a", "sort by rating", shownIds())
+dlg.sortBtn.onclick() -- back to relevance
+check(shownIds() == "a,b,c", "sort cycles back to relevance", shownIds())
+
+-- ---------- 8. failed later page keeps partial results ----------
+statuses["searchjob7"] = pageStatus({ hit("z", "Partial Hit", false) })
+statuses["searchjob8"] =
+    '{"state":"failed","done":0,"total":1,"message":"","error":"boom",'
+    .. '"updates":[],"deps":[],"results":[]}'
+dlg.searchEntry:setText("partial")
+dlg:onSearchClicked()
+tick(4)
+check(#dlg.results == 1 and dlg.results[1].id == "z", "partial results kept")
+check(dlg.statusLabel.name:find(WB_Text.SearchPartial) ~= nil,
+    "partial failure noted in status", dlg.statusLabel.name)
+
+-- ---------- 9. no Java API -> no crash ----------
 wbSearchWorkshop = nil
 dlg.searchEntry:setText("test")
 dlg:onSearchClicked() -- must not error
 tick(2)
 check(true, "no bridge function does not crash")
 
--- ---------- 8. close ----------
-dlg.closeBtn.onclick()
+-- ---------- 10. close stops the chain ----------
+local callsBefore = #searchCalls
+wbSearchWorkshop = function(q, page)
+    searchCalls[#searchCalls + 1] = { query = q, page = page }
+    return "slowjob"
+end
+statuses["slowjob"] = pageStatus({ hit("q", "Slow Hit", false) })
+dlg.searchEntry:setText("test")
+dlg:onSearchClicked() -- page 1 job starts
+dlg.closeBtn.onclick() -- close before it completes
 check(ms.wbSearchDialog == nil, "dialog closed and dereferenced")
+tick(2) -- page 1 completes; the chain must not continue
+local chained = false
+for i = callsBefore + 1, #searchCalls do
+    if searchCalls[i].page == 2 then chained = true end
+end
+check(not chained, "closed dialog does not chain page 2")
 
 if failures == 0 then print("ALL SEARCH TESTS PASSED") end
 os.exit(failures == 0 and 0 or 1)

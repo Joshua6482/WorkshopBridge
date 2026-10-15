@@ -71,18 +71,23 @@ public final class WorkshopSearch {
         }
     }
 
-    /** Browse pages fetched per search (BOIII's cap). */
+    /** Browse pages fetched per search (Lua chains one job per page). */
     private static final int MAX_PAGES = 10;
     /** Gentle gap between page fetches; Steam rate-limits scrapers. */
     private static final int PAGE_DELAY_MS = 1000;
-    /** Sanity cap on total hits; keeps details calls and the UI list sane. */
+    /** Sanity cap on hits per page batch; keeps details calls and the UI list sane. */
     private static final int MAX_ITEMS = 150;
 
-    private static final long SEARCH_TTL_MS = 10 * 60 * 1000;
+    private static final long PAGE_TTL_MS = 10 * 60 * 1000;
     private static final long DETAILS_TTL_MS = 60 * 60 * 1000;
 
     private static final int HTTP_OK = 200;
     private static final int HTTP_RATE_LIMITED = 429;
+
+    /** Global fetch pacing: at most one browse fetch per PAGE_DELAY_MS,
+     * no matter how the calls interleave. */
+    private static final Object FETCH_LOCK = new Object();
+    private static long lastFetchAt = 0;
 
     private static String browseBaseUrl() {
         return System.getProperty("workshopbridge.workshopBrowseUrl",
@@ -103,28 +108,53 @@ public final class WorkshopSearch {
         }
     }
 
-    private static final ConcurrentMap<String, CacheEntry<List<String>>> SEARCH_CACHE =
+    private static final ConcurrentMap<String, CacheEntry<List<String>>> PAGE_CACHE =
             new ConcurrentHashMap<>();
     private static final ConcurrentMap<String, CacheEntry<Item>> DETAILS_CACHE =
             new ConcurrentHashMap<>();
 
     /**
-     * Searches the workshop for {@code query}. Returns enriched items in
-     * Steam's relevance order. Never returns null. Throws IOException with
-     * a user-readable message on network failure, rate limiting, or an
-     * unexpected page (Steam markup drift); an empty list means no hits.
+     * One page of enriched search results, in Steam's relevance order.
+     * Never returns null. Throws IOException with a user-readable message
+     * on network failure, rate limiting, or an unexpected page (Steam
+     * markup drift); an empty list means no (more) hits.
      */
-    public static List<Item> search(String query, Consumer<String> progress) throws IOException {
+    public static List<Item> searchPage(String query, int page) throws IOException {
+        return searchPage(query, page, WorkshopSearch::fetchPage);
+    }
+
+    /** searchPage with an injectable fetcher, for tests. */
+    static List<Item> searchPage(String query, int page, PageFetcher fetcher) throws IOException {
         String q = query == null ? "" : query.trim();
         if (q.isEmpty()) {
             throw new IllegalArgumentException("empty search query");
         }
-        List<String> ids = searchIds(q, WorkshopSearch::fetchPage, progress);
-        return enrich(ids, progress);
+        if (page < 1 || page > MAX_PAGES) {
+            throw new IllegalArgumentException("page out of range: " + page);
+        }
+        String key = q.toLowerCase(java.util.Locale.ROOT) + "\0" + page;
+        CacheEntry<List<String>> cached = PAGE_CACHE.get(key);
+        long now = System.currentTimeMillis();
+        final List<String> ids;
+        if (cached != null && now - cached.at < PAGE_TTL_MS) {
+            ids = cached.value;
+        } else {
+            String html = fetcher.fetch(q, page);
+            validatePage(html);
+            ids = parseSearchIds(html);
+            PAGE_CACHE.put(key, new CacheEntry<>(ids, now));
+        }
+        if (ids.size() > MAX_ITEMS) {
+            return enrich(ids.subList(0, MAX_ITEMS), null);
+        }
+        return enrich(ids, null);
     }
 
-    /** One browse page's HTML; throws on HTTP/network failure. */
+    /** One browse page's HTML; throws on HTTP/network failure.
+     * Self-pacing: real fetches never run closer than PAGE_DELAY_MS apart,
+     * however the calls interleave. */
     private static String fetchPage(String query, int page) throws IOException {
+        paceFetch();
         String url = browseBaseUrl()
                 + "?appid=108600"
                 + "&searchtext=" + URLEncoder.encode(query, StandardCharsets.UTF_8)
@@ -162,42 +192,18 @@ public final class WorkshopSearch {
         String fetch(String query, int page) throws IOException;
     }
 
-    /**
-     * Item ids for a query, in page order, duplicates dropped. Stops early
-     * when a page yields no new ids. Package-private for tests.
-     */
-    static List<String> searchIds(String query, PageFetcher fetcher,
-            Consumer<String> progress) throws IOException {
-        String key = query.toLowerCase(java.util.Locale.ROOT);
-        CacheEntry<List<String>> cached = SEARCH_CACHE.get(key);
-        if (cached != null && System.currentTimeMillis() - cached.at < SEARCH_TTL_MS) {
-            return cached.value;
+    /** Enforces the global minimum gap between real page fetches. */
+    private static void paceFetch() throws IOException {
+        long wait;
+        synchronized (FETCH_LOCK) {
+            wait = PAGE_DELAY_MS - (System.currentTimeMillis() - lastFetchAt);
         }
-        Set<String> seen = new LinkedHashSet<>();
-        for (int page = 1; page <= MAX_PAGES && seen.size() < MAX_ITEMS; page++) {
-            if (progress != null) {
-                progress.accept("Searching Workshop... (page " + page + ")");
-            }
-            String html = fetcher.fetch(query, page);
-            validatePage(html);
-            List<String> ids = parseSearchIds(html);
-            int before = seen.size();
-            for (String id : ids) {
-                if (seen.size() >= MAX_ITEMS) {
-                    break;
-                }
-                seen.add(id);
-            }
-            if (seen.size() == before) {
-                break; // no new ids: past the last results page
-            }
-            if (page < MAX_PAGES) {
-                sleepQuietly(PAGE_DELAY_MS);
-            }
+        if (wait > 0) {
+            sleepQuietly(wait);
         }
-        List<String> out = new ArrayList<>(seen);
-        SEARCH_CACHE.put(key, new CacheEntry<>(out, System.currentTimeMillis()));
-        return out;
+        synchronized (FETCH_LOCK) {
+            lastFetchAt = System.currentTimeMillis();
+        }
     }
 
     /**
@@ -349,7 +355,7 @@ public final class WorkshopSearch {
 
     /** Clears both caches. Used by tests. */
     static void clearCaches() {
-        SEARCH_CACHE.clear();
+        PAGE_CACHE.clear();
         DETAILS_CACHE.clear();
     }
 }

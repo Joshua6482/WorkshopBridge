@@ -150,13 +150,15 @@ public final class JobManager {
     }
 
     /**
-     * Searches the workshop by name on a background thread. The job's
-     * {@code results} status field carries one map per hit when done
+     * Searches one workshop browse page on a background thread. Lua chains
+     * page jobs (page 1, 2, ...) until a page yields no new ids, so
+     * results stream into the UI instead of arriving all at once. The
+     * job's {@code results} status field carries one map per hit
      * ({id, title, description, tags, subscribers, rating, fileSize,
      * timeUpdated, previewUrl, installed}).
      */
-    public String submitSearch(String query) {
-        return submit("search", job -> runSearch(job, query));
+    public String submitSearch(String query, int page) {
+        return submit("search", job -> runSearch(job, query, page));
     }
 
     /** JSON status object, or null for unknown job ids. */
@@ -215,12 +217,12 @@ public final class JobManager {
         job.state = State.DONE;
     }
 
-    private void runSearch(Job job, String query) {
-        job.message = "Searching Workshop...";
+    private void runSearch(Job job, String query, int page) {
+        job.message = "Searching Workshop... (page " + page + ")";
         job.total = 1;
         List<WorkshopSearch.Item> found;
         try {
-            found = WorkshopSearch.search(query, msg -> job.message = msg);
+            found = WorkshopSearch.searchPage(query, page);
         } catch (IllegalArgumentException e) {
             fail(job, e);
             return;
@@ -246,8 +248,8 @@ public final class JobManager {
         }
         job.results = results;
         job.done = 1;
-        job.message = results.isEmpty() ? "No mods found"
-                : results.size() + " mod(s) found";
+        job.message = results.isEmpty() ? "No more results"
+                : results.size() + " mod(s) on page " + page;
         job.state = State.DONE;
     }
 

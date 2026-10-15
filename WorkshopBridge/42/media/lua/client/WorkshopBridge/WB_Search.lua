@@ -75,6 +75,24 @@ local function drawResultRow(lb, y, item)
     return y + 46
 end
 
+-- result sort orders; relevance is Steam's textsearch order (arrival order)
+local WB_SEARCH_SORTS = {
+    { text = WB_Text.SortRelevance,
+      fn = function(a, b) return (a._order or 0) < (b._order or 0) end },
+    { text = WB_Text.SortSubscribers,
+      fn = function(a, b) return (tonumber(a.subscribers) or 0) > (tonumber(b.subscribers) or 0) end },
+    { text = WB_Text.SortUpdated,
+      fn = function(a, b) return (tonumber(a.timeUpdated) or 0) > (tonumber(b.timeUpdated) or 0) end },
+    { text = WB_Text.SortRating,
+      fn = function(a, b)
+          local ra, rb = tonumber(a.rating) or -1, tonumber(b.rating) or -1
+          if ra ~= rb then return ra > rb end
+          return (tonumber(a.subscribers) or 0) > (tonumber(b.subscribers) or 0)
+      end },
+}
+
+local WB_SEARCH_MAX_PAGES = 10
+
 function WB_SearchDialog:buildControls()
     local pad = 12
     local w, h = self:getWidth(), self:getHeight()
@@ -83,7 +101,7 @@ function WB_SearchDialog:buildControls()
     -- so it can never underlap the details title on the right
     local listY = pad + 56
     local listW = math.floor((w - pad * 3) * 0.52)
-    local listH = h - listY - pad
+    local listH = h - listY - pad - 34 -- footer row holds the sort button
     local searchBtnW = 110
     local entryW = listW - searchBtnW - 8
 
@@ -119,6 +137,14 @@ function WB_SearchDialog:buildControls()
         self:onInstallClicked()
     end
     self:addChild(self.resultList)
+
+    self.sortBtn = ISButton:new(pad, h - pad - 28, 180, 28,
+        "Sort: " .. WB_SEARCH_SORTS[1].text, self,
+        function() self:onSortClicked() end)
+    self.sortBtn:initialise()
+    self.sortBtn:instantiate()
+    self.sortBtn:setFont(UIFont.Small)
+    self:addChild(self.sortBtn)
 
     -- details panel (right)
     local dx = pad * 2 + listW
@@ -165,7 +191,15 @@ function WB_SearchDialog:buildControls()
     self.closeBtn:setFont(UIFont.Small)
     self:addChild(self.closeBtn)
 
-    self.results = {}
+    self.results = {}     -- all hits, arrival (relevance) order
+    self.displayed = {}   -- sorted copy currently shown in the list
+    self.seenIds = {}
+    self.nextOrder = 1
+    self.sortIdx = 1
+    self.page = 0
+    self.query = nil
+    self.searchActive = false
+    self.searchGen = 0
     self.selectedResult = nil
     self.lastSelected = nil
 end
@@ -187,51 +221,140 @@ function WB_SearchDialog:onSearchClicked()
         self:setStatus(WB_Text.SearchFailed)
         return
     end
-    self:setStatus(WB_Text.Searching)
-    self.resultList:clear()
+    -- new search: bump the generation so a previous chain's late
+    -- callbacks cannot merge into these results
+    self.searchGen = self.searchGen + 1
+    self.query = q
+    self.page = 0
     self.results = {}
+    self.displayed = {}
+    self.seenIds = {}
+    self.nextOrder = 1
+    self.searchActive = true
+    self.resultList:clear()
     self.selectedResult = nil
     self.lastSelected = nil
     self:showDetails(nil)
-    local ok, jobId = pcall(wbSearchWorkshop, q)
-    if not ok or not jobId then
-        self:setStatus(WB_Text.SearchFailed)
+    self:setStatus(WB_Text.Searching)
+    print("[WorkshopBridge] workshop search for \"" .. q .. "\"")
+    self:fetchNextPage()
+end
+
+-- Starts the job for the next browse page. Pages stream into the list as
+-- they arrive instead of waiting for all pages up front.
+function WB_SearchDialog:fetchNextPage()
+    if not self.searchActive then return end
+    self.page = self.page + 1
+    if self.page > WB_SEARCH_MAX_PAGES then
+        self:finishSearch()
         return
     end
-    print("[WorkshopBridge] workshop search for \"" .. q
-        .. "\" (job " .. tostring(jobId) .. ")")
+    local ok, jobId = pcall(wbSearchWorkshop, self.query, self.page)
+    if not ok or not jobId then
+        self:finishSearch(WB_Text.SearchFailed)
+        return
+    end
     local dlg = self
+    local gen = self.searchGen
+    local page = self.page
     WB_TrackJob(jobId, {
         onUpdate = function(st)
-            if dlg.searchEntry then
+            if dlg.searchActive and dlg.searchGen == gen then
                 dlg:setStatus(st and st.message or WB_Text.Searching)
             end
         end,
         onDone = function(st)
+            if not dlg.searchActive or dlg.searchGen ~= gen then return end
             if not st or st.state == "failed" then
-                dlg:setStatus(WB_Text.SearchFailed .. ": "
-                    .. WB_ShortError(st and st.error, 80))
+                if page == 1 then
+                    dlg:finishSearch(WB_Text.SearchFailed .. ": "
+                        .. WB_ShortError(st and st.error, 80))
+                else
+                    -- keep the partial results, note the hiccup
+                    dlg:finishSearch(WB_Text.SearchPartial .. ": "
+                        .. WB_ShortError(st and st.error, 80))
+                end
                 return
             end
-            dlg:showResults(st.results or {})
+            local added = dlg:mergeResults(st.results or {})
+            if added == 0 then
+                dlg:finishSearch() -- no new ids: past the last page
+            else
+                dlg:fetchNextPage()
+            end
         end,
     })
 end
 
-function WB_SearchDialog:showResults(results)
-    self.results = results or {}
+-- Merges one page's hits into the results (arrival order, duplicates
+-- dropped). Returns the number of new hits; re-renders when > 0.
+function WB_SearchDialog:mergeResults(incoming)
+    local added = 0
+    for _, r in ipairs(incoming or {}) do
+        local id = tostring(r.id or "")
+        if id ~= "" and not self.seenIds[id] then
+            self.seenIds[id] = true
+            r._order = self.nextOrder
+            self.nextOrder = self.nextOrder + 1
+            self.results[#self.results + 1] = r
+            added = added + 1
+        end
+    end
+    if added > 0 then
+        self:renderResults()
+    end
+    return added
+end
+
+-- Rebuilds the list from self.results using the current sort order,
+-- preserving the selection by workshop id.
+function WB_SearchDialog:renderResults()
+    local selId = self.selectedResult and tostring(self.selectedResult.id) or nil
+    local hadSelection = self.selectedResult ~= nil
+    local sorted = {}
+    for _, r in ipairs(self.results) do sorted[#sorted + 1] = r end
+    table.sort(sorted, WB_SEARCH_SORTS[self.sortIdx].fn)
+    self.displayed = sorted
     self.resultList:clear()
-    for _, r in ipairs(self.results) do
+    for _, r in ipairs(sorted) do
         self.resultList:addItem(r.title ~= "" and r.title or r.id, r)
     end
-    if #self.results == 0 then
-        self:setStatus(WB_Text.NoResults)
-        return
+    self.lastSelected = nil
+    self.selectedResult = nil
+    if #sorted > 0 then
+        local idx = nil
+        if selId then
+            for i, r in ipairs(sorted) do
+                if tostring(r.id) == selId then idx = i; break end
+            end
+        elseif not hadSelection then
+            idx = 1 -- auto-select the first hit of a fresh search
+        end
+        if idx then
+            self.resultList.selected = idx
+            self.lastSelected = idx
+            self:showDetails(sorted[idx])
+        end
     end
-    self:setStatus("")
-    self.resultList.selected = 1
-    self.lastSelected = 1
-    self:showDetails(self.results[1])
+end
+
+function WB_SearchDialog:finishSearch(statusText)
+    self.searchActive = false
+    if statusText then
+        self:setStatus(statusText)
+    elseif #self.results == 0 then
+        self:setStatus(WB_Text.NoResults)
+    else
+        self:setStatus("")
+    end
+end
+
+function WB_SearchDialog:onSortClicked()
+    self.sortIdx = self.sortIdx % #WB_SEARCH_SORTS + 1
+    if self.sortBtn.setTitle then
+        self.sortBtn:setTitle("Sort: " .. WB_SEARCH_SORTS[self.sortIdx].text)
+    end
+    self:renderResults()
 end
 
 function WB_SearchDialog:showDetails(r)
@@ -286,16 +409,18 @@ end
 
 function WB_SearchDialog:update()
     ISPanel.update(self)
-    -- selection can change via mouse or keyboard; poll cheaply
+    -- selection can change via mouse or keyboard; poll cheaply. Index into
+    -- displayed (the sorted view), not results (arrival order).
     local sel = self.resultList and self.resultList.selected or nil
-    if sel and sel ~= self.lastSelected and self.results then
+    if sel and sel ~= self.lastSelected and self.displayed then
         self.lastSelected = sel
-        local r = self.results[sel]
+        local r = self.displayed[sel]
         if r then self:showDetails(r) end
     end
 end
 
 function WB_SearchDialog:close()
+    self.searchActive = false -- stop any in-flight page chain
     local ms = self.ms
     self:setVisible(false)
     if ms then

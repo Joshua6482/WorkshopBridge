@@ -98,7 +98,7 @@ function WB_InstallDebugStub()
         return newJob("adopt", 8)
     end
 
-    function wbSearchWorkshop(query)
+    function wbSearchWorkshop(query, page)
         return newJob("search", 4)
     end
 

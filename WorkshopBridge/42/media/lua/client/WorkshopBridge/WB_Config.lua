@@ -93,4 +93,9 @@ WB_Text = {
     NoResults        = "No mods found",
     Install          = "Install",
     InstalledBadge   = "[Installed]",
+    SortRelevance    = "Relevance",
+    SortSubscribers  = "Most subscribed",
+    SortUpdated      = "Recently updated",
+    SortRating       = "Top rated",
+    SearchPartial    = "Showing partial results",
 }

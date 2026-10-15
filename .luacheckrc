@@ -129,8 +129,9 @@ read_globals = {
 
 -- WB_DebugStub.lua legitimately *defines* the Java bridge functions
 -- (they are read-only everywhere else), so they are writable there.
+-- Its args are intentionally unused (throwaway scaffolding).
 files["**/WB_DebugStub.lua"] = {
-    globals = {
+    ignore = { "212" },globals = {
         "wbAdoptMod",
         "wbCheckDependencies",
         "wbCheckForUpdates",
