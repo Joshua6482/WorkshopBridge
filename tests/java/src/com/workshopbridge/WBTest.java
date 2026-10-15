@@ -353,6 +353,140 @@ public class WBTest {
         check(WorkshopDependencies.getRequired(null).isEmpty(),
                 "deps: null id -> empty, no throw");
 
+        // ---- 2c2. workshop search parsing ----
+        // The fixture below is a REAL captured Steam workshop browse page
+        // (searchtext=test, textsearch sort), and Steam's markup drifts over
+        // time. Warn when the capture is over a month old so a passing test
+        // doesn't hide a stale fixture. The date is hardcoded because git
+        // does not preserve file mtimes.
+        java.time.LocalDate searchCaptured = java.time.LocalDate.of(2026, 10, 15);
+        long searchAgeDays = java.time.temporal.ChronoUnit.DAYS.between(
+                searchCaptured, java.time.LocalDate.now(java.time.ZoneOffset.UTC));
+        if (searchAgeDays > 30) {
+            System.out.println("WARNING: tests/java/fixtures/workshopbrowse-search.html "
+                    + "was captured " + searchAgeDays + " days ago. "
+                    + "Steam may have changed the browse markup since; re-capture it.");
+        }
+        String searchHtml = Files.readString(
+                new File(fixtureDir, "workshopbrowse-search.html").toPath(),
+                StandardCharsets.UTF_8);
+        java.util.List<String> searchIds =
+                WorkshopSearch.parseSearchIds(searchHtml);
+        check(searchIds.size() == 30 && "3183820077".equals(searchIds.get(0)),
+                "search: real page yields 30 ids in order", searchIds.size());
+        check(WorkshopSearch.parseSearchIds(null).isEmpty(),
+                "search: null html -> empty");
+        check(WorkshopSearch.parseSearchIds("<html>nope</html>").isEmpty(),
+                "search: no links -> empty");
+        // thumbnail-anchored: a bare filedetails link without an <img>
+        // (sidebar/footer chrome) is not a result row
+        String mixedLinks = "<div class=\"workshop\">"
+                + "<a href=\"https://steamcommunity.com/sharedfiles/filedetails/?id=111\">"
+                + "<img src=\"x\"></a>"
+                + "<a href=\"https://steamcommunity.com/sharedfiles/filedetails/?id=111\">"
+                + "<img src=\"y\"></a>"
+                + "<a href=\"https://steamcommunity.com/sharedfiles/filedetails/?id=222\">"
+                + "plain text, no thumbnail</a></div>";
+        java.util.List<String> mixed = WorkshopSearch.parseSearchIds(mixedLinks);
+        check(mixed.size() == 1 && "111".equals(mixed.get(0)),
+                "search: order kept, duplicates dropped, bare links ignored", mixed);
+        // rate limiting
+        check(WorkshopSearch.isRateLimited(
+                "<html>you've made too many requests recently</html>"),
+                "search: rate-limit page detected");
+        check(!WorkshopSearch.isRateLimited(searchHtml),
+                "search: real page is not rate-limited");
+        boolean threwRate = false;
+        try {
+            WorkshopSearch.validatePage(
+                    "<html><body>too many requests, slow down</body></html>");
+        } catch (java.io.IOException e) {
+            threwRate = e.getMessage().contains("rate-limiting");
+        }
+        check(threwRate, "search: rate-limit page fails validation loudly");
+        boolean threwUnexpected = false;
+        try {
+            WorkshopSearch.validatePage("<html><body>some random page</body></html>");
+        } catch (java.io.IOException e) {
+            threwUnexpected = e.getMessage().contains("unexpected page");
+        }
+        check(threwUnexpected, "search: non-workshop page fails validation loudly");
+        WorkshopSearch.validatePage(searchHtml); // must not throw
+        check(true, "search: real page passes validation");
+        // BBCode stripping
+        check("Hello bold world".equals(WorkshopSearch.stripBbcode(
+                "[h1]Hello[/h1] [b]bold[/b] world")),
+                "search: BBCode tags stripped");
+        check("a & b <c>".equals(WorkshopSearch.stripBbcode(
+                "[url=http://x]a &amp; b[/url] &lt;c&gt;")),
+                "search: entities unescaped, url tag stripped");
+        check("".equals(WorkshopSearch.stripBbcode(null)),
+                "search: null description -> empty");
+        // searchIds paging with an injected fetcher (page 2 empty -> stop)
+        WorkshopSearch.clearCaches();
+        java.util.Map<Integer, String> pages = new java.util.HashMap<>();
+        pages.put(1, mixedLinks);
+        pages.put(2, "<div class=\"workshop\">no more here</div>");
+        java.util.concurrent.atomic.AtomicInteger fetchCount =
+                new java.util.concurrent.atomic.AtomicInteger(0);
+        java.util.List<String> paged = WorkshopSearch.searchIds("test",
+                (q, p) -> {
+                    fetchCount.incrementAndGet();
+                    check("test".equals(q), "search: fetcher gets the query", q);
+                    return pages.getOrDefault(p, "");
+                }, null);
+        check(paged.size() == 1 && "111".equals(paged.get(0)),
+                "search: pages merged, stops on empty page", paged);
+        check(fetchCount.get() == 2, "search: fetched exactly 2 pages",
+                fetchCount.get());
+        java.util.List<String> cached = WorkshopSearch.searchIds("test",
+                (q, p) -> { throw new AssertionError("must not refetch"); }, null);
+        check(cached.equals(paged), "search: repeat query served from cache");
+        WorkshopSearch.clearCaches();
+        boolean threwEmpty = false;
+        try {
+            WorkshopSearch.search("   ", null);
+        } catch (IllegalArgumentException e) {
+            threwEmpty = true;
+        }
+        check(threwEmpty, "search: blank query rejected");
+        // details parsing
+        String detailsJson = "{\"response\":{\"publishedfiledetails\":["
+                + "{\"publishedfileid\":\"111\",\"result\":1,\"title\":\"Stub Mod\","
+                + "\"description\":\"A [b]bold[/b] stub.\",\"file_size\":1048576,"
+                + "\"preview_url\":\"http://x/y.jpg\",\"time_updated\":1780000000,"
+                + "\"subscriptions\":1234,\"views\":5678,"
+                + "\"tags\":[{\"tag\":\"Mod\"},{\"tag\":\"B42\"}],"
+                + "\"vote_data\":{\"score\":0.95,\"votes_up\":95,\"votes_down\":5}},"
+                + "{\"publishedfileid\":\"222\",\"result\":1,\"title\":\"No Votes\","
+                + "\"description\":\"\",\"tags\":[]}"
+                + "]}}";
+        java.util.Map<String, java.util.Map<String, Object>> details =
+                WorkshopApi.parseDetails(detailsJson);
+        check(details.size() == 2, "search: details parsed for both ids", details.size());
+        java.util.Map<String, Object> d111 = details.get("111");
+        check("Stub Mod".equals(d111.get("title")), "search: detail title");
+        check("A [b]bold[/b] stub.".equals(d111.get("description")),
+                "search: detail description raw (stripped at build)");
+        check(java.util.List.of("Mod", "B42").equals(d111.get("tags")),
+                "search: detail tags");
+        check(Long.valueOf(1234L).equals(d111.get("subscriptions")),
+                "search: detail subscriptions");
+        check(Long.valueOf(95L).equals(d111.get("votesUp")), "search: votes up");
+        WorkshopSearch.Item item111 =
+                WorkshopSearch.buildItem("111", d111);
+        check("A bold stub.".equals(item111.description),
+                "search: built item has stripped description", item111.description);
+        check(Math.abs(item111.rating() - 0.95) < 1e-9,
+                "search: rating ratio", item111.rating());
+        WorkshopSearch.Item item222 =
+                WorkshopSearch.buildItem("222", details.get("222"));
+        check(item222.rating() == -1.0, "search: no votes -> rating -1");
+        check(throwsIAE(() -> WorkshopApi.parseDetails("not json")),
+                "search: garbage details -> throws (never silently empty)");
+        check(throwsIAE(() -> WorkshopApi.parseDetails("{\"response\":{}}")),
+                "search: details without array -> throws");
+
         // ---- 2d. server-join mod list parsing ----
         java.util.List<String[]> twoMods = java.util.List.of(
                 new String[] { "ModA", "111", "Mod A" },
@@ -712,6 +846,7 @@ public class WBTest {
             System.out.println("SKIPPED check reports the outdated workshop item (no usable loopback HTTP here)");
             System.out.println("SKIPPED check flags deleted item (no usable loopback HTTP here)");
             System.out.println("SKIPPED live update-all HTTP test (no usable loopback HTTP here)");
+            System.out.println("SKIPPED search job HTTP test (no usable loopback HTTP here)");
         } else {
             // ---- 4b. dependency job against the stub workshop page ----
             System.setProperty("workshopbridge.workshopPageUrl",
@@ -831,6 +966,66 @@ public class WBTest {
                     "check reports the skipped item instead of a clean bill",
                     flightSt == null ? null : flightSt.get("message"));
             awaitDone(jobs, slowUpId);
+            apiJson.set("{\"response\":{\"publishedfiledetails\":["
+                    + "{\"publishedfileid\":\"111\",\"time_updated\":2000,"
+                    + "\"result\":1}]}}");
+
+            // ---- 4c6. search job against stub browse + stub API ----
+            String searchHtml1 = "<html><body><div class=\"workshop\">"
+                    + "<a href=\"https://steamcommunity.com/sharedfiles/filedetails/?id=111\">"
+                    + "<img src=\"a.jpg\"></a>"
+                    + "<a href=\"https://steamcommunity.com/sharedfiles/filedetails/?id=222\">"
+                    + "<img src=\"b.jpg\"></a></div></body></html>";
+            String searchHtmlEmpty =
+                    "<html><body><div class=\"workshop\">no more</div></body></html>";
+            api.createContext("/browse", ex -> {
+                String qq = ex.getRequestURI().getQuery();
+                String sbody = qq != null && qq.contains("p=2")
+                        ? searchHtmlEmpty : searchHtml1;
+                byte[] sb = sbody.getBytes(StandardCharsets.UTF_8);
+                ex.getResponseHeaders().add("Content-Type", "text/html; charset=utf-8");
+                ex.sendResponseHeaders(200, sb.length);
+                try (OutputStream os = ex.getResponseBody()) { os.write(sb); }
+            });
+            apiJson.set("{\"response\":{\"publishedfiledetails\":["
+                    + "{\"publishedfileid\":\"111\",\"result\":1,\"title\":\"Stub Search Mod\","
+                    + "\"description\":\"A [b]bold[/b] stub.\",\"file_size\":1048576,"
+                    + "\"preview_url\":\"http://x/y.jpg\",\"time_updated\":1780000000,"
+                    + "\"subscriptions\":1234,\"views\":5678,"
+                    + "\"tags\":[{\"tag\":\"Mod\"}],"
+                    + "\"vote_data\":{\"score\":0.95,\"votes_up\":95,\"votes_down\":5}},"
+                    + "{\"publishedfileid\":\"222\",\"result\":1,\"title\":\"Second\","
+                    + "\"description\":\"\",\"tags\":[],\"subscriptions\":0,\"views\":0,"
+                    + "\"file_size\":100,\"time_updated\":1780000000,\"preview_url\":\"\","
+                    + "\"vote_data\":{\"score\":0,\"votes_up\":0,\"votes_down\":0}}"
+                    + "]}}");
+            String savedBrowseUrl = System.getProperty("workshopbridge.workshopBrowseUrl");
+            System.setProperty("workshopbridge.workshopBrowseUrl",
+                    "http://127.0.0.1:" + apiPort + "/browse");
+            WorkshopSearch.clearCaches();
+            String searchJobId = jobs.submitSearch("stub query");
+            Map<String, Object> searchSt = awaitDone(jobs, searchJobId);
+            check("done".equals(searchSt.get("state")),
+                    "search job completes", searchSt.get("state"));
+            List<Object> hits = Json.array(searchSt.get("results"));
+            check(hits != null && hits.size() == 2,
+                    "search job returns two hits", hits);
+            Map<String, Object> hit0 = Json.object(hits.get(0));
+            check("111".equals(hit0.get("id"))
+                            && "Stub Search Mod".equals(hit0.get("title")),
+                    "search hit id and title", hit0.get("title"));
+            check("A bold stub.".equals(hit0.get("description")),
+                    "search hit description stripped", hit0.get("description"));
+            check(Double.valueOf(0.95).equals(hit0.get("rating")),
+                    "search hit rating", hit0.get("rating"));
+            // the test map tracks 111 and 222 (see 4c), so both are installed
+            check(Boolean.TRUE.equals(hit0.get("installed")),
+                    "search hit installed flag from the map", hit0.get("installed"));
+            if (savedBrowseUrl != null) {
+                System.setProperty("workshopbridge.workshopBrowseUrl", savedBrowseUrl);
+            } else {
+                System.clearProperty("workshopbridge.workshopBrowseUrl");
+            }
             apiJson.set("{\"response\":{\"publishedfiledetails\":["
                     + "{\"publishedfileid\":\"111\",\"time_updated\":2000,"
                     + "\"result\":1}]}}");

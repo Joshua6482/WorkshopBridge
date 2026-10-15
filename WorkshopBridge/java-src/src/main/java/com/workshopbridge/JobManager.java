@@ -1,6 +1,7 @@
 package com.workshopbridge;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
@@ -37,6 +38,10 @@ public final class JobManager {
         // dependency-check results ("deps" jobs only): one map per required
         // item, {id, title, installed}
         volatile List<Map<String, Object>> deps = Collections.emptyList();
+        // workshop search results ("search" jobs only): one map per hit,
+        // {id, title, description, tags, subscribers, rating, fileSize,
+        // timeUpdated, previewUrl, installed}
+        volatile List<Map<String, Object>> results = Collections.emptyList();
 
         Job(String id, String kind) {
             this.id = id;
@@ -54,6 +59,7 @@ public final class JobManager {
             }
             m.put("updates", updates);
             m.put("deps", deps);
+            m.put("results", results);
             return Json.stringify(m);
         }
     }
@@ -143,6 +149,16 @@ public final class JobManager {
         return submit("deps", job -> runDependencies(job, workshopId));
     }
 
+    /**
+     * Searches the workshop by name on a background thread. The job's
+     * {@code results} status field carries one map per hit when done
+     * ({id, title, description, tags, subscribers, rating, fileSize,
+     * timeUpdated, previewUrl, installed}).
+     */
+    public String submitSearch(String query) {
+        return submit("search", job -> runSearch(job, query));
+    }
+
     /** JSON status object, or null for unknown job ids. */
     public String statusJson(String jobId) {
         Job j = jobs.get(jobId);
@@ -196,6 +212,42 @@ public final class JobManager {
         job.done = 1;
         job.message = deps.isEmpty() ? "No dependencies found"
                 : deps.size() + " required item(s) found";
+        job.state = State.DONE;
+    }
+
+    private void runSearch(Job job, String query) {
+        job.message = "Searching Workshop...";
+        job.total = 1;
+        List<WorkshopSearch.Item> found;
+        try {
+            found = WorkshopSearch.search(query, msg -> job.message = msg);
+        } catch (IllegalArgumentException e) {
+            fail(job, e);
+            return;
+        } catch (IOException e) {
+            fail(job, e);
+            return;
+        }
+        Set<String> installed = backend.workshopMap().snapshot().keySet();
+        List<Map<String, Object>> results = new ArrayList<>();
+        for (WorkshopSearch.Item it : found) {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("id", it.id);
+            m.put("title", it.title);
+            m.put("description", it.description);
+            m.put("tags", it.tags);
+            m.put("subscribers", it.subscribers);
+            m.put("rating", it.rating());
+            m.put("fileSize", it.fileSize);
+            m.put("timeUpdated", it.timeUpdated);
+            m.put("previewUrl", it.previewUrl);
+            m.put("installed", installed.contains(it.id));
+            results.add(m);
+        }
+        job.results = results;
+        job.done = 1;
+        job.message = results.isEmpty() ? "No mods found"
+                : results.size() + " mod(s) found";
         job.state = State.DONE;
     }
 

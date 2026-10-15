@@ -23,6 +23,7 @@ require "WorkshopBridge/WB_Tools"
 require "WorkshopBridge/WB_Adopt"
 require "WorkshopBridge/WB_Delete"
 require "WorkshopBridge/WB_Dependencies"
+require "WorkshopBridge/WB_Search"
 
 -- ---------- helpers ----------
 
@@ -318,18 +319,19 @@ local function WB_AddMenuButtons(ms)
     if not anchor then return end
     local bh, gap = anchor:getHeight(), 10
     local y = anchor:getY()
-    -- Four buttons join vanilla's bottom-right cluster on its left. On narrow
-    -- displays 4x150px would run off-screen (the old math.max clamp only
-    -- prevented that by stacking the leftmost button over its neighbor),
-    -- so shrink the buttons to fit the space left of the anchor.
+    -- Five buttons join vanilla's bottom-right cluster on its left. On narrow
+    -- displays 5x150px would run off-screen, so shrink the buttons to fit
+    -- the space left of the anchor.
     local bw = 150
+    local nBtn = 5
     local avail = anchor:getX() - gap
-    if 4 * bw + 3 * gap > avail then
-        bw = math.max(100, math.floor((avail - 3 * gap) / 4))
+    if nBtn * bw + (nBtn - 1) * gap > avail then
+        bw = math.max(100, math.floor((avail - (nBtn - 1) * gap) / nBtn))
     end
-    local xTools = math.max(0, anchor:getX() - gap - (4 * bw + 3 * gap))
+    local xTools = math.max(0, anchor:getX() - gap - (nBtn * bw + (nBtn - 1) * gap))
     local xDownload = xTools + bw + gap
-    local xCheck = xDownload + bw + gap
+    local xSearch = xDownload + bw + gap
+    local xCheck = xSearch + bw + gap
     local xUpdate = xCheck + bw + gap
     ms.wbCheckBtn = ISButton:new(xCheck, y, bw, bh, WB_Text.CheckForUpdates, ms,
         function() WB_OnCheckAll(ms) end)
@@ -337,9 +339,11 @@ local function WB_AddMenuButtons(ms)
         function() WB_OnUpdateAll(ms) end)
     ms.wbDownloadBtn = ISButton:new(xDownload, y, bw, bh, WB_Text.Download, ms,
         function() WB_ShowDownloadDialog(ms) end)
+    ms.wbSearchBtn = ISButton:new(xSearch, y, bw, bh, WB_Text.SearchWorkshop, ms,
+        function() WB_ShowSearchDialog(ms) end)
     ms.wbToolsBtn = ISButton:new(xTools, y, bw, bh, WB_Text.MoreTools, ms,
         function() WB_ShowToolsDialog(ms) end)
-    for _, b in ipairs({ ms.wbCheckBtn, ms.wbUpdateAllBtn, ms.wbDownloadBtn, ms.wbToolsBtn }) do
+    for _, b in ipairs({ ms.wbCheckBtn, ms.wbUpdateAllBtn, ms.wbDownloadBtn, ms.wbSearchBtn, ms.wbToolsBtn }) do
         b:initialise()
         b:instantiate()
         b:setAnchorLeft(false)

@@ -98,6 +98,10 @@ function WB_InstallDebugStub()
         return newJob("adopt", 8)
     end
 
+    function wbSearchWorkshop(query)
+        return newJob("search", 4)
+    end
+
     function wbOpenWorkshopPage(workshopId)
         return true
     end
@@ -134,6 +138,22 @@ function WB_InstallDebugStub()
             for wsid in pairs(items) do all[#all + 1] = wsid end
             table.sort(all)
             return statusJson("done", j.total, j.total, "Check complete", all)
+        end
+        if j.kind == "search" then
+            -- canned hits shaped exactly like the real job's results field
+            local r1 = '{"id":"1111111111","title":"Stub Mod One",'
+                .. '"description":"A stub mod for search UI tests.",'
+                .. '"tags":["Mod"],"subscribers":1234,"rating":0.95,'
+                .. '"fileSize":1048576,"timeUpdated":1780000000,'
+                .. '"previewUrl":"","installed":true}'
+            local r2 = '{"id":"2222222222","title":"Stub Mod Two",'
+                .. '"description":"Another stub.","tags":[],'
+                .. '"subscribers":56,"rating":-1,"fileSize":2048,'
+                .. '"timeUpdated":1780000000,"previewUrl":"",'
+                .. '"installed":false}'
+            return '{"state":"done","done":' .. j.total .. ',"total":' .. j.total
+                .. ',"message":"2 mod(s) found","updates":[],"deps":[],'
+                .. '"results":[' .. r1 .. "," .. r2 .. "]}"
         end
         return statusJson("done", j.total, j.total, "Done")
     end

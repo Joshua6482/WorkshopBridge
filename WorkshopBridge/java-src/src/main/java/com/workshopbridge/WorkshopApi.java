@@ -8,6 +8,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -92,6 +93,112 @@ public final class WorkshopApi {
         } catch (IllegalArgumentException e) {
             throw new IOException("malformed Steam API response: " + e.getMessage(), e);
         }
+    }
+
+    /**
+     * Returns id -> detail map for the given ids, via the keyless
+     * GetPublishedFileDetails endpoint with vote data. Ids with no usable
+     * entry are absent from the map. Batched at 50 ids per call (the
+     * endpoint accepts more, but small batches stay comfortably under
+     * Steam's per-call limits).
+     */
+    public static Map<String, Map<String, Object>> getDetails(List<String> ids) throws IOException {
+        Map<String, Map<String, Object>> out = new LinkedHashMap<>();
+        for (int from = 0; from < ids.size(); from += 50) {
+            List<String> batch = ids.subList(from, Math.min(ids.size(), from + 50));
+            StringBuilder body = new StringBuilder("itemcount=").append(batch.size())
+                    .append("&return_vote_data=true");
+            for (int i = 0; i < batch.size(); i++) {
+                body.append("&publishedfileids%5B").append(i).append("%5D=")
+                        .append(URLEncoder.encode(batch.get(i), StandardCharsets.UTF_8));
+            }
+            final String raw = postForm(detailsUrl(), body.toString());
+            try {
+                out.putAll(parseDetails(raw));
+            } catch (IllegalArgumentException e) {
+                throw new IOException("malformed Steam API response: " + e.getMessage(), e);
+            }
+        }
+        return out;
+    }
+
+    /**
+     * Extracts id -> {title, description, tags, subscriptions, views,
+     * fileSize, timeUpdated, previewUrl, votesUp, votesDown} from a
+     * GetPublishedFileDetails response body. Package-private so tests can
+     * run it against captured real responses.
+     *
+     * @throws IllegalArgumentException when the response is not JSON or is
+     *         missing the expected structure.
+     */
+    static Map<String, Map<String, Object>> parseDetails(String json) {
+        Map<String, Map<String, Object>> out = new LinkedHashMap<>();
+        try {
+            final Object root = Json.parse(json);
+            Map<String, Object> rootObj = Json.object(root);
+            Map<String, Object> response = rootObj == null ? null : Json.object(rootObj.get("response"));
+            if (response == null) {
+                throw new IllegalArgumentException("missing 'response' object");
+            }
+            List<Object> details = Json.array(response.get("publishedfiledetails"));
+            if (details == null) {
+                throw new IllegalArgumentException("missing 'publishedfiledetails' array");
+            }
+            for (Object d : details) {
+                Map<String, Object> m = Json.object(d);
+                if (m == null) {
+                    continue;
+                }
+                String id = idString(m.get("publishedfileid"));
+                if (id == null || id.isEmpty()) {
+                    continue;
+                }
+                Map<String, Object> e = new LinkedHashMap<>();
+                e.put("title", str(m.get("title")));
+                e.put("description", str(m.get("description")));
+                List<String> tags = new ArrayList<>();
+                List<Object> tagObjs = Json.array(m.get("tags"));
+                if (tagObjs != null) {
+                    for (Object t : tagObjs) {
+                        Map<String, Object> tm = Json.object(t);
+                        if (tm != null) {
+                            String tag = str(tm.get("tag"));
+                            if (!tag.isEmpty()) {
+                                tags.add(tag);
+                            }
+                        }
+                    }
+                }
+                e.put("tags", tags);
+                e.put("subscriptions", num(m.get("subscriptions")));
+                e.put("views", num(m.get("views")));
+                e.put("fileSize", num(m.get("file_size")));
+                e.put("timeUpdated", num(m.get("time_updated")));
+                e.put("previewUrl", str(m.get("preview_url")));
+                Map<String, Object> voteData = Json.object(m.get("vote_data"));
+                e.put("votesUp", voteData == null ? 0L : num(voteData.get("votes_up")));
+                e.put("votesDown", voteData == null ? 0L : num(voteData.get("votes_down")));
+                out.put(id, e);
+            }
+        } catch (ClassCastException e) {
+            throw new IllegalArgumentException("response has unexpected JSON structure", e);
+        }
+        return out;
+    }
+
+    private static String idString(Object idObj) {
+        if (idObj instanceof Number) {
+            return String.valueOf(((Number) idObj).longValue());
+        }
+        return idObj == null ? null : String.valueOf(idObj);
+    }
+
+    private static String str(Object o) {
+        return o == null ? "" : String.valueOf(o);
+    }
+
+    private static long num(Object o) {
+        return o instanceof Number ? ((Number) o).longValue() : 0L;
     }
 
     private static String postForm(String url, String formBody) throws IOException {

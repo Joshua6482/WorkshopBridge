@@ -219,6 +219,20 @@ public final class SteamCmdApi {
     }
 
     /**
+     * Starts a workshop search job for the given name query.
+     * Returns a job id, or null on failure.
+     */
+    @LuaMethod(name = "wbSearchWorkshop", global = true)
+    public static String wbSearchWorkshop(String query) {
+        try {
+            if (query == null || query.trim().isEmpty()) return null;
+            return Backend.get().jobs().submitSearch(query.trim());
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
+    /**
      * Polls a job. Returns a JSON status object
      * ({@code state/done/total/message[/error][/updates][/deps]}), or null for
      * unknown job ids. See docs/ARCHITECTURE.md for the shape.
