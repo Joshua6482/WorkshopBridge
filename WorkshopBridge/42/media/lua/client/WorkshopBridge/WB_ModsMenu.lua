@@ -454,12 +454,40 @@ local function WB_WrapUpdatePump(ms)
     end
 end
 
+-- Close every WorkshopBridge dialog on the screen (menu dialogs and
+-- per-mod dialogs alike). Used when the Mods screen is reshown so dialogs
+-- left open before ESC don't reappear.
+function WB_CloseAllDialogs(ms)
+    if not ms then return end
+    for _, key in ipairs({
+        "wbSearchDialog", "wbDownloadDialog", "wbToolsDialog",
+        "wbAdoptDialog", "wbDeleteDialog", "wbDependenciesDialog",
+        "wbImportTextDialog", "wbImportCollectionDialog",
+    }) do
+        local dlg = ms[key]
+        if dlg then
+            if dlg.close then pcall(dlg.close, dlg)
+            elseif dlg.setVisible then pcall(dlg.setVisible, dlg, false) end
+        end
+    end
+end
+
 -- idempotent per-instance hook (safe to re-call, e.g. after reloadMods)
 function WB_HookInstance(ms)
     if not ms then return end
     wbScreen = ms
     WB_AddMenuButtons(ms)
     WB_WrapUpdatePump(ms)
+    -- the ModSelector instance survives ESC; when it's reshown, drop any
+    -- dialogs that were open when it was left
+    if not ms.wbVisibilityWrapped and ms.setVisible then
+        ms.wbVisibilityWrapped = true
+        local _setVisible = ms.setVisible
+        ms.setVisible = function(self, v)
+            _setVisible(self, v)
+            if v then WB_CloseAllDialogs(self) end
+        end
+    end
 end
 
 -- ---------- ModInfoPanel (per-mod) hooks ----------

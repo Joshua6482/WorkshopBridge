@@ -328,5 +328,12 @@ check(ms.wbSearchDialog == dlg, "same dialog reused")
 check(dlg:isVisible() ~= false, "dialog visible again")
 check(dlg.searchEntry:getText() == "test", "search term persisted")
 
+-- ---------- 12. menu button toggles the dialog ----------
+WB_ShowSearchDialog(ms) -- dialog is open: button closes it
+check(dlg:isVisible() == false, "button toggles open dialog closed")
+WB_ShowSearchDialog(ms) -- closed: button reopens it
+check(dlg:isVisible() ~= false, "button reopens closed dialog")
+check(dlg.searchEntry:getText() == "test", "term survives toggle")
+
 if failures == 0 then print("ALL SEARCH TESTS PASSED") end
 os.exit(failures == 0 and 0 or 1)

@@ -136,7 +136,10 @@ ms.wbDownloadBtn.onclick()
 check(ms.wbDownloadDialog ~= nil, "dialog opens on click")
 check(ms.wbDownloadDialog:isVisible(), "dialog visible")
 local dlg = ms.wbDownloadDialog
-ms.wbDownloadBtn.onclick() -- again: must not stack duplicates
+ms.wbDownloadBtn.onclick() -- again: toggles closed, not a duplicate
+check(dlg:isVisible() == false, "button toggles open dialog closed")
+ms.wbDownloadBtn.onclick() -- reopen
+check(dlg:isVisible() ~= false, "button reopens closed dialog")
 check(#ms.children == kidsBefore + 1, "no duplicate dialogs", #ms.children)
 
 -- invalid input: error shown, dialog stays open, no job started
@@ -153,7 +156,7 @@ check(dlg.errorLabel.name == WB_Text.InvalidWorkshopId, "empty input shows error
 -- valid id: dialog closes, job runs, reloadMods called on completion
 dlg.entry:setText("  777888999  ")
 dlg.downloadBtn.onclick()
-check(ms.wbDownloadDialog == nil, "dialog closes on valid input")
+check(dlg:isVisible() == false, "dialog hides on valid input")
 tick(200) -- stub update job: 12 ticks/step x 8 steps
 check((ms.reloaded or 0) >= 1, "reloadMods called after download")
 check(invalidateCalls >= 1, "mod caches invalidated before list reload", invalidateCalls)
@@ -161,18 +164,19 @@ check(invalidateCalls >= 1, "mod caches invalidated before list reload", invalid
 -- URL input works too
 ms.wbDownloadBtn.onclick()
 local dlg2 = ms.wbDownloadDialog
+check(dlg2 == dlg, "same dialog reused")
 dlg2.entry:setText("https://steamcommunity.com/sharedfiles/filedetails/?id=555666777")
 dlg2.downloadBtn.onclick()
-check(ms.wbDownloadDialog == nil, "dialog closes on URL input")
+check(dlg2:isVisible() == false, "dialog hides on URL input")
 tick(200)
 check((ms.reloaded or 0) >= 2, "reloadMods called after URL download")
 
--- cancel closes without starting anything
+-- cancel hides without starting anything
 ms.wbDownloadBtn.onclick()
 local dlg3 = ms.wbDownloadDialog
-check(dlg3 ~= nil, "dialog reopens")
+check(dlg3 == dlg, "dialog reopens")
 dlg3.cancelBtn.onclick()
-check(ms.wbDownloadDialog == nil, "cancel closes dialog")
+check(dlg3:isVisible() == false, "cancel hides dialog")
 
 -- ---------- dependency check gated by mod option ----------
 local realCheckDeps = WB_CheckDependencies

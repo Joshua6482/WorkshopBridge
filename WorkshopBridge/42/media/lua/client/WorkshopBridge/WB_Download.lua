@@ -97,12 +97,9 @@ function WB_DownloadDialog:onDownloadClicked()
 end
 
 function WB_DownloadDialog:close()
-    local ms = self.ms
+    -- hide, don't destroy: the menu button toggles, so the dialog must
+    -- survive close to be reshown
     self:setVisible(false)
-    if ms then
-        pcall(function() ms:removeChild(self) end)
-        if ms.wbDownloadDialog == self then ms.wbDownloadDialog = nil end
-    end
 end
 
 -- Opens the dialog, centered on the ModSelector screen. Reuses the open
@@ -110,7 +107,12 @@ end
 function WB_ShowDownloadDialog(ms)
     if not ms then return end
     if ms.wbDownloadDialog then
-        ms.wbDownloadDialog:setVisible(true)
+        local dlg = ms.wbDownloadDialog
+        if dlg:isVisible() then
+            dlg:close() -- toggle: button closes an open dialog
+        else
+            dlg:setVisible(true)
+        end
         return
     end
     local w, h = 420, 170

@@ -522,10 +522,15 @@ end
 function WB_ShowSearchDialog(ms)
     if not ms then return end
     if ms.wbSearchDialog then
+        local dlg = ms.wbSearchDialog
+        if dlg:isVisible() then
+            dlg:close() -- toggle: button closes an open dialog
+            return
+        end
         -- installed flags go stale (e.g. mod deleted while the dialog was
         -- hidden); re-check before showing
-        ms.wbSearchDialog:refreshInstalled()
-        ms.wbSearchDialog:setVisible(true)
+        dlg:refreshInstalled()
+        dlg:setVisible(true)
         return
     end
     local mw, mh = ms:getWidth(), ms:getHeight()

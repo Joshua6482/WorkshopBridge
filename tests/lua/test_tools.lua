@@ -260,7 +260,7 @@ local exportedCsv = nil
 local realExport = wbExportModList
 wbExportModList = function(csv) exportedCsv = csv; return realExport(csv) end
 tools.exportBtn.onclick()
-check(ms.wbToolsDialog == nil, "tools dialog closes on export")
+check(tools:isVisible() == false, "tools dialog hides on export")
 check(exportedCsv ~= nil, "wbExportModList called")
 local eset = {}
 for id in (exportedCsv or ""):gmatch("%d+") do eset[id] = true end

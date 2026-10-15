@@ -303,28 +303,35 @@ function WB_ToolsDialog:buildControls()
         c:setFont(UIFont.Small)
         self:addChild(c)
     end
-    -- Collection import is untested in-game; it stays behind the
-    -- "Enable collection import (experimental)" mod option (off by
-    -- default). Read here, at dialog-open time, so toggling the option
-    -- takes effect without a restart.
-    if self.importCollectionBtn.setEnable then
+    self:refreshOptions()
+end
+
+-- Collection import is untested in-game; it stays behind the
+-- "Enable collection import (experimental)" mod option (off by
+-- default). Read at dialog-open time, so toggling the option
+-- takes effect without a restart.
+function WB_ToolsDialog:refreshOptions()
+    if self.importCollectionBtn and self.importCollectionBtn.setEnable then
         self.importCollectionBtn:setEnable(WB_GetEnableCollectionImport())
     end
 end
 
 function WB_ToolsDialog:close()
-    local ms = self.ms
+    -- hide, don't destroy: the menu button toggles, so the dialog must
+    -- survive close to be reshown
     self:setVisible(false)
-    if ms then
-        pcall(function() ms:removeChild(self) end)
-        if ms.wbToolsDialog == self then ms.wbToolsDialog = nil end
-    end
 end
 
 function WB_ShowToolsDialog(ms)
     if not ms then return end
     if ms.wbToolsDialog then
-        ms.wbToolsDialog:setVisible(true)
+        local dlg = ms.wbToolsDialog
+        if dlg:isVisible() then
+            dlg:close() -- toggle: button closes an open dialog
+        else
+            dlg:refreshOptions()
+            dlg:setVisible(true)
+        end
         return
     end
     local w, h = 360, 194 -- content ends at y=182 (cancel button), +12 pad

@@ -52,6 +52,7 @@ globals = {
     "WB_GetEnableCollectionImport",
     "WB_GetModListBoxClass",
     "WB_GetOfferServerModDownloads",
+    "WB_CloseAllDialogs",
     "WB_GetRefreshListPerDownload",
     "WB_GetWriteSidecarStamp",
     "WB_HideProgress",
