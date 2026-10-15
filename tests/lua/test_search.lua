@@ -63,7 +63,9 @@ function ISTextEntryBox:setText(t) self.text = t end
 function ISTextEntryBox:setMultipleLine(m) self.multiLine = m end
 function ISTextEntryBox:setEditable(e) self.editable = e end
 ISRichTextPanel = UIElement:derive("ISRichTextPanel")
-function ISRichTextPanel:setText(t) self.text = t end
+-- NOTE: deliberately no setText here: the real PZ widget lacks it, so the
+-- mod must fall back to .text + paginate()
+function ISRichTextPanel:paginate() self.paginated = true end
 function ISRichTextPanel:getText() return self.text end
 ISScrollingListBox = UIElement:derive("ISScrollingListBox")
 function ISScrollingListBox:new(x, y, w, h)
@@ -86,6 +88,7 @@ tmp = tmp .. "/wb-luatest-search"
 os.execute("mkdir -p " .. tmp)
 os.execute("ln -sfn " .. LUA_DIR .. " " .. tmp .. "/WorkshopBridge")
 package.path = tmp .. "/?.lua;" .. package.path
+require("WorkshopBridge/WB_Json")
 require("WorkshopBridge/WB_Search")
 
 local function tick(n)
@@ -112,6 +115,14 @@ local openedWorkshopId = nil
 function wbOpenWorkshopPage(workshopId)
     openedWorkshopId = workshopId
     return true
+end
+-- installed-mod lookup: workshop id -> JSON array of mod ids
+local installedMods = { ["111"] = { "AlphaMod" }, ["222"] = {} }
+function wbGetModIds(wsid)
+    local ids = installedMods[tostring(wsid)] or {}
+    local parts = {}
+    for _, id in ipairs(ids) do parts[#parts + 1] = '"' .. id .. '"' end
+    return "[" .. table.concat(parts, ",") .. "]"
 end
 function wbImportMods(csv)
     importCsv = csv
@@ -180,6 +191,7 @@ check(dlg.detailStats.name:find("1.2k subscribers") ~= nil, "stats line shows su
     dlg.detailStats.name)
 check(dlg.detailTags.name == "Mod", "tags shown", dlg.detailTags.name)
 check(dlg.descPanel:getText() == "A test mod.", "description shown")
+check(dlg.descPanel.paginated == true, "description repaginated")
 
 -- ---------- 4. install button states ----------
 -- row 2 (Beta Mod, id 222) is selected and not installed
@@ -207,7 +219,18 @@ dlg:update()
 check(dlg.installBtn.title == WB_Text.Update, "button says Update for installed",
     dlg.installBtn.title)
 
--- ---------- 4b. workshop page button ----------
+-- ---------- 4b. installed flags refresh on reopen ----------
+-- id 111 was installed at search time; simulate a delete, close, reopen
+check(dlg.results[1].installed == true, "111 installed before delete")
+installedMods["111"] = {}
+dlg.closeBtn.onclick()
+WB_ShowSearchDialog(ms)
+check(dlg.results[1].installed == false, "stale installed flag cleared",
+    tostring(dlg.results[1].installed))
+check(dlg.installBtn.title == WB_Text.Install, "button back to Install",
+    dlg.installBtn.title)
+
+-- ---------- 4c. workshop page button ----------
 check(dlg.workshopBtn ~= nil, "workshop page button built")
 check(dlg.workshopBtn.title == WB_Text.WorkshopPage, "workshop button title")
 dlg.workshopBtn.onclick()

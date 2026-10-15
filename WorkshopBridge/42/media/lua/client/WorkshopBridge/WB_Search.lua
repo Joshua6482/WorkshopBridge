@@ -382,6 +382,19 @@ function WB_SearchDialog:onSortClicked()
     self:renderResults()
 end
 
+-- ISRichTextPanel's text API varies across builds: try setText first,
+-- fall back to the raw field plus an explicit repaginate.
+local function setDescriptionText(panel, text)
+    if not panel then return end
+    text = tostring(text or "")
+    if panel.setText then
+        panel:setText(text)
+        return
+    end
+    panel.text = text
+    if panel.paginate then pcall(panel.paginate, panel) end
+end
+
 function WB_SearchDialog:showDetails(r)
     self.selectedResult = r
     local title = r and (r.title ~= "" and r.title or r.id) or ""
@@ -398,13 +411,37 @@ function WB_SearchDialog:showDetails(r)
     if self.detailTags.setName then
         self.detailTags:setName(WB_Truncate(tags, 64))
     end
-    if self.descPanel and self.descPanel.setText then
-        self.descPanel:setText(r and tostring(r.description or "") or "")
-    end
+    setDescriptionText(self.descPanel, r and r.description or "")
     self:updateInstallButton()
 end
 
 -- Install button state machine: Install / Update / Installing...
+-- Re-check the installed flag for every result (cheap map lookup via
+-- wbGetModIds); call when the dialog is reshown so deletes done elsewhere
+-- don't leave stale "[Installed]" badges and "Update" buttons.
+function WB_SearchDialog:refreshInstalled()
+    if type(wbGetModIds) ~= "function" then return end
+    local changed = false
+    for _, r in ipairs(self.results) do
+        if r.id and not r._installing then
+            local ok, raw = pcall(wbGetModIds, tostring(r.id))
+            local nowInstalled = false
+            if ok and raw then
+                local dok, dec = pcall(WB_JsonDecode, raw)
+                nowInstalled = dok and type(dec) == "table" and #dec > 0
+            end
+            if (r.installed or false) ~= nowInstalled then
+                r.installed = nowInstalled
+                changed = true
+            end
+        end
+    end
+    if changed then
+        self:renderResults()
+        self:updateInstallButton()
+    end
+end
+
 function WB_SearchDialog:updateInstallButton()
     if not self.installBtn then return end
     if self.installingId then
@@ -493,6 +530,9 @@ end
 function WB_ShowSearchDialog(ms)
     if not ms then return end
     if ms.wbSearchDialog then
+        -- installed flags go stale (e.g. mod deleted while the dialog was
+        -- hidden); re-check before showing
+        ms.wbSearchDialog:refreshInstalled()
         ms.wbSearchDialog:setVisible(true)
         return
     end
