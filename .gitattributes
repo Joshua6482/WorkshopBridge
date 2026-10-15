@@ -1,2 +1,3 @@
 # Test fixtures shouldn't count toward GitHub's language stats.
 tests/java/fixtures/workshoppage-requireditems.html linguist-detectable=false
+tests/java/fixtures/workshopbrowse-search.html linguist-detectable=false
