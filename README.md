@@ -2,8 +2,6 @@
 
 Download and update Steam Workshop mods from inside Project Zomboid. Built for non-Steam (GOG) players who can't use the Steam Workshop directly.
 
-A Lua UI in the Mods menu ("Check for updates", "Update all", per-mod "Update", "Download") talks to a Java backend (via [ZombieBuddy](https://github.com/zed-0xff/ZombieBuddy)) that runs `steamcmd`, moves downloaded mods into place, and remembers which workshop item each mod came from.
-
 ![UI Overview](docs/images/UI3.png)
 
 ## Recommended Mods
