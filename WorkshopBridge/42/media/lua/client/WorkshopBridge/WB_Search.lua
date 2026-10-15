@@ -79,8 +79,15 @@ function WB_SearchDialog:buildControls()
     local pad = 12
     local w, h = self:getWidth(), self:getHeight()
 
-    -- search row (top-left)
-    local entryW = math.floor(w * 0.45)
+    -- results list (left); the search row above lives inside this column
+    -- so it can never underlap the details title on the right
+    local listY = pad + 56
+    local listW = math.floor((w - pad * 3) * 0.52)
+    local listH = h - listY - pad
+    local searchBtnW = 110
+    local entryW = listW - searchBtnW - 8
+
+    -- search row (top-left, inside the results column)
     self.searchEntry = ISTextEntryBox:new("", pad, pad, entryW, 26)
     self.searchEntry:initialise()
     self.searchEntry:instantiate()
@@ -88,7 +95,7 @@ function WB_SearchDialog:buildControls()
     self.searchEntry.onCommandEntered = function() self:onSearchClicked() end
     self:addChild(self.searchEntry)
 
-    self.searchBtn = ISButton:new(pad + entryW + 8, pad, 110, 28,
+    self.searchBtn = ISButton:new(pad + entryW + 8, pad, searchBtnW, 28,
         WB_Text.Search, self, function() self:onSearchClicked() end)
     self.searchBtn:initialise()
     self.searchBtn:instantiate()
@@ -101,10 +108,6 @@ function WB_SearchDialog:buildControls()
     self.statusLabel:instantiate()
     self:addChild(self.statusLabel)
 
-    -- results list (left)
-    local listY = pad + 56
-    local listW = math.floor((w - pad * 3) * 0.52)
-    local listH = h - listY - pad
     self.resultList = ISScrollingListBox:new(pad, listY, listW, listH)
     self.resultList:initialise()
     self.resultList:instantiate()
