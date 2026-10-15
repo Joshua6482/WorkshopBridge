@@ -473,15 +473,18 @@ local kidsAfterRetry = #bare.children
 WB_HookInstance(bare)
 check(#bare.children == kidsAfterRetry, "successful install stays idempotent")
 
--- ---------- dialogs close when the screen is reshown (ESC) ----------
+-- ---------- dialogs close when the screen hides (ESC) ----------
 -- fake an open search dialog on the hooked instance
 local fakeDlg = { visible = true,
     setVisible = function(self, v) self.visible = v end,
     isVisible = function(self) return self.visible end,
     close = function(self) self.visible = false end }
 bare.wbSearchDialog = fakeDlg
-bare:setVisible(true) -- reshow: dialogs must not survive
-check(fakeDlg.visible == false, "open dialog closed on screen reshow")
+bare:setVisible(false) -- hide: dialogs must not survive
+check(fakeDlg.visible == false, "open dialog closed on screen hide")
+-- reshown screen starts clean
+bare:setVisible(true)
+check(fakeDlg.visible == false, "dialog stays closed on reshow")
 -- direct helper also works
 fakeDlg.visible = true
 WB_CloseAllDialogs(bare)

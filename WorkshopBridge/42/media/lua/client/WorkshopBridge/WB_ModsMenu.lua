@@ -478,14 +478,14 @@ function WB_HookInstance(ms)
     wbScreen = ms
     WB_AddMenuButtons(ms)
     WB_WrapUpdatePump(ms)
-    -- the ModSelector instance survives ESC; when it's reshown, drop any
-    -- dialogs that were open when it was left
+    -- the ModSelector instance survives ESC; when it's hidden, drop any
+    -- dialogs that were open so they don't reappear on reshow
     if not ms.wbVisibilityWrapped and ms.setVisible then
         ms.wbVisibilityWrapped = true
         local _setVisible = ms.setVisible
         ms.setVisible = function(self, v)
             _setVisible(self, v)
-            if v then WB_CloseAllDialogs(self) end
+            if not v then WB_CloseAllDialogs(self) end
         end
     end
 end
