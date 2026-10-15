@@ -67,7 +67,9 @@ local function drawResultRow(lb, y, item)
     local title = WB_Truncate(r.title ~= "" and r.title or r.id, 44)
     lb:drawText(title, 8, y + 4, 1, 1, 1, 1, UIFont.Small)
     local sub = WB_FormatStats(r)
-    if r.installed then
+    if r._installing then
+        sub = WB_Text.Installing .. (sub ~= "" and "  |  " .. sub or "")
+    elseif r.installed then
         sub = WB_Text.InstalledBadge .. (sub ~= "" and "  |  " .. sub or "")
     end
     lb:drawText(WB_Truncate(sub, 64), 8, y + 24, 0.65, 0.65, 0.65, 1,
@@ -91,7 +93,7 @@ local WB_SEARCH_SORTS = {
       end },
 }
 
-local WB_SEARCH_MAX_PAGES = 10
+local WB_SEARCH_MAX_PAGES = 3
 
 function WB_SearchDialog:buildControls()
     local pad = 12
@@ -130,7 +132,21 @@ function WB_SearchDialog:buildControls()
     self.resultList:initialise()
     self.resultList:instantiate()
     self.resultList.itemheight = 46
+    local dlgSelf = self
     self.resultList.doDrawItem = function(lb, y, item)
+        local r = item.item or {}
+        -- selected-row highlight (vanilla list draws none)
+        if dlgSelf.selectedResult and tostring(r.id or "")
+                == tostring(dlgSelf.selectedResult.id or "") then
+            lb:drawRect(0, y, lb:getWidth(), 46, 0.35, 0.25, 0.45, 0.75)
+        end
+        -- status bar on the row's left edge: green = installed,
+        -- orange = installing
+        if r._installing then
+            lb:drawRect(0, y, 3, 46, 0.9, 1.0, 0.65, 0.2)
+        elseif r.installed then
+            lb:drawRect(0, y, 3, 46, 0.8, 0.3, 0.8, 0.3)
+        end
         return drawResultRow(lb, y, item)
     end
     self.resultList.onMouseDoubleClick = function()
@@ -170,12 +186,12 @@ function WB_SearchDialog:buildControls()
     y = y + 24
     local btnH = 28
     local descH = h - y - pad - btnH - 8
-    self.descBox = ISTextEntryBox:new("", dx, y, dw, descH)
-    self.descBox:initialise()
-    self.descBox:instantiate()
-    self.descBox:setMultipleLine(true)
-    if self.descBox.setEditable then self.descBox:setEditable(false) end
-    self:addChild(self.descBox)
+    -- ISRichTextPanel: the vanilla scrollable read-only text widget (with
+    -- a real scrollbar); the multiline text entry scrolled unclamped.
+    self.descPanel = ISRichTextPanel:new(dx, y, dw, descH)
+    self.descPanel:initialise()
+    self.descPanel:instantiate()
+    self:addChild(self.descPanel)
 
     self.installBtn = ISButton:new(dx, h - pad - btnH, 140, btnH,
         WB_Text.Install, self, function() self:onInstallClicked() end)
@@ -183,6 +199,15 @@ function WB_SearchDialog:buildControls()
     self.installBtn:instantiate()
     self.installBtn:setFont(UIFont.Small)
     self:addChild(self.installBtn)
+
+    -- "open in Steam" lives next to Install
+    self.workshopBtn = ISButton:new(dx + 148, h - pad - btnH, 140, btnH,
+        WB_Text.WorkshopPage, self,
+        function() self:onWorkshopPageClicked() end)
+    self.workshopBtn:initialise()
+    self.workshopBtn:instantiate()
+    self.workshopBtn:setFont(UIFont.Small)
+    self:addChild(self.workshopBtn)
 
     self.closeBtn = ISButton:new(w - pad - 100, h - pad - btnH, 100, btnH,
         WB_Text.Close, self, function() self:close() end)
@@ -373,14 +398,31 @@ function WB_SearchDialog:showDetails(r)
     if self.detailTags.setName then
         self.detailTags:setName(WB_Truncate(tags, 64))
     end
-    if self.descBox.setText then
-        self.descBox:setText(r and r.description or "")
+    if self.descPanel and self.descPanel.setText then
+        self.descPanel:setText(r and tostring(r.description or "") or "")
+    end
+    self:updateInstallButton()
+end
+
+-- Install button state machine: Install / Update / Installing...
+function WB_SearchDialog:updateInstallButton()
+    if not self.installBtn then return end
+    if self.installingId then
+        self.installBtn:setTitle(WB_Text.Installing)
+        self.installBtn:setEnable(false)
+    elseif self.selectedResult and self.selectedResult.installed then
+        self.installBtn:setTitle(WB_Text.Update)
+        self.installBtn:setEnable(true)
+    else
+        self.installBtn:setTitle(WB_Text.Install)
+        self.installBtn:setEnable(true)
     end
 end
 
 function WB_SearchDialog:onInstallClicked()
     local r = self.selectedResult
     if not r or not r.id then return end
+    if self.installingId then return end -- one install at a time
     if type(wbImportMods) ~= "function" then return end
     local ok, jobId = pcall(wbImportMods, tostring(r.id))
     if not ok or not jobId then
@@ -389,22 +431,41 @@ function WB_SearchDialog:onInstallClicked()
     end
     print("[WorkshopBridge] installing from search: " .. tostring(r.id)
         .. " (job " .. tostring(jobId) .. ")")
+    self.installingId = tostring(r.id)
+    r._installing = true
+    self:updateInstallButton()
+    self:renderResults() -- row shows the installing indicator
     local dlg = self
     WB_TrackJob(jobId, {
         onUpdate = function(st)
             dlg:setStatus(st and st.message or WB_Text.Importing)
         end,
         onDone = function(st)
+            dlg.installingId = nil
+            r._installing = nil
             if not st or st.state == "failed" then
                 dlg:setStatus(WB_Text.ImportFailed .. ": "
                     .. WB_ShortError(st and st.error, 64))
-                return
+            else
+                dlg:setStatus(WB_Text.Imported)
+                r.installed = true
+                WB_RefreshModList(dlg.ms)
             end
-            dlg:setStatus(WB_Text.Imported)
-            r.installed = true
-            WB_RefreshModList(dlg.ms)
+            dlg:updateInstallButton()
+            dlg:renderResults()
         end,
     })
+end
+
+function WB_SearchDialog:onWorkshopPageClicked()
+    local r = self.selectedResult
+    if not r or not r.id then return end
+    if type(wbOpenWorkshopPage) ~= "function" then return end
+    local ok = wbOpenWorkshopPage(tostring(r.id))
+    if not ok then
+        print("[WorkshopBridge] couldn't open the workshop page for "
+            .. tostring(r.id))
+    end
 end
 
 function WB_SearchDialog:update()
@@ -421,12 +482,9 @@ end
 
 function WB_SearchDialog:close()
     self.searchActive = false -- stop any in-flight page chain
-    local ms = self.ms
+    -- hide, don't destroy: reopening restores the search term, results,
+    -- sort order and selection as they were
     self:setVisible(false)
-    if ms then
-        pcall(function() ms:removeChild(self) end)
-        if ms.wbSearchDialog == self then ms.wbSearchDialog = nil end
-    end
 end
 
 -- Opens the search dialog, sized as fractions of the ModSelector screen

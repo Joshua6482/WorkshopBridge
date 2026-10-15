@@ -228,7 +228,7 @@ public final class SteamCmdApi {
         try {
             if (query == null || query.trim().isEmpty()) return null;
             int p = (int) page;
-            if (p < 1 || p > 10) return null;
+            if (p < 1 || p > WorkshopSearch.MAX_PAGES) return null;
             return Backend.get().jobs().submitSearch(query.trim(), p);
         } catch (Throwable t) {
             return null;

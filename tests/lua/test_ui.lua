@@ -462,6 +462,7 @@ WB_HookInstance(bare) -- no mapOrderbtn/modOrderbtn/acceptButton yet
 check(bare.wbCheckBtn == nil, "no buttons installed without an anchor")
 bare.mapOrderbtn = {
     getHeight = function() return 30 end,
+    getWidth = function() return 100 end,
     getX = function() return 900 end,
     getY = function() return 700 end,
 }

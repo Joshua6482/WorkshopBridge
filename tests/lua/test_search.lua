@@ -39,6 +39,8 @@ function UIElement:getWidth() return self.width end
 function UIElement:getHeight() return self.height end
 function UIElement:setName(n) self.name = n end
 function UIElement:setTitle(t) self.title = t end
+function UIElement:setEnable(e) self.enabled = e end
+function UIElement:isEnabled() return self.enabled ~= false end
 function UIElement:setFont(f) self.font = f end
 function UIElement:drawText(...) end
 
@@ -60,6 +62,9 @@ function ISTextEntryBox:getText() return self.text end
 function ISTextEntryBox:setText(t) self.text = t end
 function ISTextEntryBox:setMultipleLine(m) self.multiLine = m end
 function ISTextEntryBox:setEditable(e) self.editable = e end
+ISRichTextPanel = UIElement:derive("ISRichTextPanel")
+function ISRichTextPanel:setText(t) self.text = t end
+function ISRichTextPanel:getText() return self.text end
 ISScrollingListBox = UIElement:derive("ISScrollingListBox")
 function ISScrollingListBox:new(x, y, w, h)
     local o = UIElement.new(self, x, y, w, h)
@@ -103,6 +108,11 @@ function wbSearchWorkshop(q, page)
     return "searchjob" .. searchJobSeq
 end
 function wbGetJobStatus(jobId) return statuses[jobId] end
+local openedWorkshopId = nil
+function wbOpenWorkshopPage(workshopId)
+    openedWorkshopId = workshopId
+    return true
+end
 function wbImportMods(csv)
     importCsv = csv
     statuses["importjob1"] =
@@ -169,14 +179,40 @@ check(dlg.detailStats.name:find("95%% positive") ~= nil, "stats line shows ratin
 check(dlg.detailStats.name:find("1.2k subscribers") ~= nil, "stats line shows subscribers",
     dlg.detailStats.name)
 check(dlg.detailTags.name == "Mod", "tags shown", dlg.detailTags.name)
-check(dlg.descBox:getText() == "A test mod.", "description shown")
+check(dlg.descPanel:getText() == "A test mod.", "description shown")
 
--- ---------- 4. install the selected result ----------
+-- ---------- 4. install button states ----------
+-- row 2 (Beta Mod, id 222) is selected and not installed
+check(dlg.installBtn.title == WB_Text.Install, "button says Install when not installed",
+    dlg.installBtn.title)
 dlg.installBtn.onclick()
 check(importCsv == "222", "install imports the selected workshop id", importCsv)
+check(dlg.installBtn.title == WB_Text.Installing, "button shows Installing...",
+    dlg.installBtn.title)
+check(dlg.installBtn.enabled == false, "button disabled while installing")
+local installingShown = false
+for _, it in ipairs(dlg.resultList.items) do
+    if it.item.id == "222" and it.item._installing then installingShown = true end
+end
+check(installingShown, "row flagged as installing")
 tick(2)
 check(dlg.statusLabel.name == WB_Text.Imported, "import success shown")
 check(dlg.results[2].installed == true, "installed flag refreshed on the hit")
+check(dlg.installBtn.title == WB_Text.Update, "button says Update after install",
+    dlg.installBtn.title)
+check(dlg.installBtn.enabled ~= false, "button re-enabled after install")
+-- selecting the already-installed row 1 shows Update too
+dlg.resultList.selected = 1
+dlg:update()
+check(dlg.installBtn.title == WB_Text.Update, "button says Update for installed",
+    dlg.installBtn.title)
+
+-- ---------- 4b. workshop page button ----------
+check(dlg.workshopBtn ~= nil, "workshop page button built")
+check(dlg.workshopBtn.title == WB_Text.WorkshopPage, "workshop button title")
+dlg.workshopBtn.onclick()
+check(openedWorkshopId == "111", "workshop page opens for selected id",
+    openedWorkshopId)
 
 -- ---------- 5. failed first page shows the error ----------
 dlg.searchEntry:setText("boom")
@@ -260,13 +296,20 @@ statuses["slowjob"] = pageStatus({ hit("q", "Slow Hit", false) })
 dlg.searchEntry:setText("test")
 dlg:onSearchClicked() -- page 1 job starts
 dlg.closeBtn.onclick() -- close before it completes
-check(ms.wbSearchDialog == nil, "dialog closed and dereferenced")
+check(dlg:isVisible() == false, "dialog hidden on close")
+check(ms.wbSearchDialog == dlg, "dialog kept for reopen")
 tick(2) -- page 1 completes; the chain must not continue
 local chained = false
 for i = callsBefore + 1, #searchCalls do
     if searchCalls[i].page == 2 then chained = true end
 end
 check(not chained, "closed dialog does not chain page 2")
+
+-- ---------- 11. reopen restores the search term ----------
+WB_ShowSearchDialog(ms)
+check(ms.wbSearchDialog == dlg, "same dialog reused")
+check(dlg:isVisible() ~= false, "dialog visible again")
+check(dlg.searchEntry:getText() == "test", "search term persisted")
 
 if failures == 0 then print("ALL SEARCH TESTS PASSED") end
 os.exit(failures == 0 and 0 or 1)

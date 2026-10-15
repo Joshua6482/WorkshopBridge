@@ -72,7 +72,7 @@ public final class WorkshopSearch {
     }
 
     /** Browse pages fetched per search (Lua chains one job per page). */
-    private static final int MAX_PAGES = 10;
+    static final int MAX_PAGES = 3;
     /** Gentle gap between page fetches; Steam rate-limits scrapers. */
     private static final int PAGE_DELAY_MS = 1000;
     /** Sanity cap on hits per page batch; keeps details calls and the UI list sane. */

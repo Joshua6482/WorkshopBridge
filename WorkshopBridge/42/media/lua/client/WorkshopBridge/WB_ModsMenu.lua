@@ -319,14 +319,15 @@ local function WB_AddMenuButtons(ms)
     if not anchor then return end
     local bh, gap = anchor:getHeight(), 10
     local y = anchor:getY()
-    -- Five buttons join vanilla's bottom-right cluster on its left. On narrow
-    -- displays 5x150px would run off-screen, so shrink the buttons to fit
-    -- the space left of the anchor.
-    local bw = 150
+    -- Five buttons join vanilla's bottom-right cluster on its left, matching
+    -- the vanilla button width (e.g. Accept) instead of a fixed 150px.
+    -- On narrow displays the row would run off-screen, so shrink the
+    -- buttons to fit the space left of the anchor.
+    local bw = anchor:getWidth()
     local nBtn = 5
     local avail = anchor:getX() - gap
     if nBtn * bw + (nBtn - 1) * gap > avail then
-        bw = math.max(100, math.floor((avail - (nBtn - 1) * gap) / nBtn))
+        bw = math.max(80, math.floor((avail - (nBtn - 1) * gap) / nBtn))
     end
     local xTools = math.max(0, anchor:getX() - gap - (nBtn * bw + (nBtn - 1) * gap))
     local xDownload = xTools + bw + gap
