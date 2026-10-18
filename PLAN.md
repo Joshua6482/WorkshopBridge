@@ -2,10 +2,9 @@
 
 ## Validation
 
-- Test on Windows: steamcmd.exe bootstrap, paths with spaces, fresh-profile first run, and a normal play session. Test pack drafted Oct 5, committed as `docs/WINDOWS_TEST_PACK.md` (prep checklist, verbatim tester guide, report template, known Windows risks). Buddy test still pending: confirm the tester is on the GOG version first.
+- Test on Windows: paths with spaces, and a normal play session. 
 - Exercise error paths: bad ID, offline, and deleted workshop item.
 - Test collection import in-game (behind the "Enable collection import (experimental)" mod option, off by default); enable by default once it is verified.
-- Verify the dependency prompt in-game: download 3799732653 (depends on 3171167894), confirm the "Required Workshop items" dialog appears and Install all works.
 
 ## Open
 
